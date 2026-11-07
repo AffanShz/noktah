@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="180 180 664 664" width="512" height="512">
+<title>music (glyph)</title>
+
+<g fill="#FFFFFF">
+  <ellipse cx="385" cy="690" rx="84" ry="62" transform="rotate(-22 385 690)"/>
+  <ellipse cx="635" cy="640" rx="84" ry="62" transform="rotate(-22 635 640)"/>
+  <rect x="433" y="372" width="44" height="318" rx="6"/>
+  <rect x="683" y="312" width="44" height="318" rx="6"/>
+  <polygon points="433,372 727,312 727,397 433,457"/>
+</g>
+</svg>

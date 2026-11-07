@@ -1,0 +1,173 @@
+# Changelog
+
+Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/),
+versi mengikuti [SemVer](https://semver.org/lang/id/).
+
+## [1.0.0] - 2026-11-08
+
+Rilis pertama. Aplikasi ini adalah overlay notch untuk Windows 10/11 yang
+digambar sendiri dengan `egui`/`eframe` — tanpa WebView, satu exe, tanpa runtime
+tambahan. Nomor versi dimulai ulang dari 1: versi 0.x sebelumnya milik aplikasi
+Tauri + React yang sudah tidak ada di repo ini.
+
+### Halaman
+- **Beranda** — jam besar, tanggal Indonesia, lagu yang sedang diputar, dan sisa
+  kuota Antigravity dari 9Router.
+- **Musik** — pemutar dari SMTC: sampul, judul/artis/album, progres bisa diklik,
+  play/pause, next/prev, dan lirik tersinkron dari LRCLIB.
+- **Now Playing** — tampilan mini satu kolom, posisi tombol transport identik
+  dengan halaman Musik.
+- **Tugas** — tambah/centang/hapus, dengan pengingat berjam yang memunculkan
+  pita di bawah notch selama 8 detik. Tugas yang terlewat ditandai.
+- **Fokus** — Pomodoro dengan cincin progres dan hitungan sesi harian.
+- **Hidrasi** — pencatat minum harian.
+- **Sistem** — cuaca, CPU, dan memori sebagai tiga kartu dengan sparkline.
+- **Tanya** — chat AI streaming enam penyedia (Gemini, OpenAI, Groq, OpenRouter,
+  DeepSeek, Ollama), kunci dienkripsi DPAPI.
+- **Agent** — status Claude Code dan persetujuan izin langsung dari notch, lewat
+  biner pendamping `noktah-hook.exe`.
+
+### Perilaku notch
+- Notch minimal 168×6 px saat tertutup; hover membuka panel penuh.
+- Tinggi panel menyesuaikan isi halaman dengan animasi pegas sungguhan
+  (solver di `native/app/src/presentation/spring.rs`).
+- Hit-test kursor: area transparan di bawah notch tidak menelan klik milik
+  aplikasi lain.
+- Baris minimized elastis dengan tujuh item yang bisa dinyalakan/dimatikan,
+  empat preset, dan lirik yang bergulir saat teks tidak muat.
+- Tray icon + menu, hotkey **Alt+N**, autostart, dan satu instance.
+- Menghormati setelan "kurangi animasi" Windows.
+
+### Teknis
+- Workspace Cargo: `native/core` (logika murni), `native/app` (UI dan adapter
+  Windows), `native/hook` (biner pendamping).
+- 157 test Rust (`cargo test --workspace`), dijalankan di CI sebelum build.
+- Cuaca lewat Open-Meteo tanpa API key; media lewat Windows SMTC, jadi Spotify,
+  YouTube Music, dan VLC terbaca tanpa plugin.
+- Data pengguna tinggal di `%APPDATA%\Noktah`. Tidak ada telemetri.
+
+### Diketahui belum
+- Mode kaca Penuh (tangkap layar + blur) masih eksperimental.
+- Belum ada code signing, jadi SmartScreen dan pemindai antivirus bisa
+  memperingatkan saat pertama dijalankan. Paket rilis menyertakan SHA-256.
+
+## [0.1.5] — 2026-10-26
+
+- Tab Musik kembali ke layout vertikal: sampul 96px + meta sebaris, progres, kontrol, lalu blok lirik selebar panel di bawahnya.
+- Setelan dikelompokkan ulang (Bahasa, Tampilan, Lirik, Pill, Kota, AI, Data, Tentang); pemilih penyedia AI yang dobel dihapus.
+- Pengaturan bahasa Indonesia/English untuk seluruh antarmuka, termasuk format tanggal.
+
+## [0.1.4] — 2026-10-26
+
+### Diperbaiki
+- **Banyak lirik dilaporkan "tidak tersedia" padahal ada di LRCLIB.** Tiga sebab:
+  - `/api/get` menuntut durasi hampir identik — "Runtuh" (Feby Putri) 404 hanya
+    karena selisih 8 detik dari entri database.
+  - `album_name` ikut dikirim, padahal album dari SMTC sering kosong atau beda
+    edisi; parameter itu justru membuat permintaan gagal.
+  - Balasan 429/503 (server sibuk) diperlakukan sama dengan 404, sehingga
+    gangguan sementara tampil sebagai "lirik tidak ada".
+- Pencarian sekarang bertingkat: exact match → fuzzy search → query bebas,
+  dengan skor berbasis judul, artis utama, dan selisih durasi, plus retry
+  untuk 429/5xx.
+- Lirik tanpa timestamp tetap ditampilkan (status `plain`), tidak lagi
+  dianggap kosong.
+
+## [0.1.3] — 2026-10-26
+
+### Ditambahkan
+- **Lirik di pill.** Saat lagu diputar, notch kecil menampilkan baris lirik yang
+  sedang aktif di kanan judul lagu. Lebar pill dihitung dari segmen yang aktif,
+  jadi ikut menyusut kalau sebagian dimatikan.
+- **Setelan → Pill saat memutar**: saklar terpisah untuk jam, cuaca, judul lagu,
+  dan lirik. Matikan semua kecuali lirik kalau mau notch jadi pemutar lirik murni.
+
+### Diubah
+- Hook lirik dipindah ke level `App`, bukan di dalam tab Musik. Sebelumnya lirik
+  berhenti dihitung begitu kamu pindah tab, dan pill tidak mungkin memakainya.
+
+## [0.1.2] — 2026-10-26
+
+### Diubah
+- **Animasi morph notch mencapai 60 fps.** Sebelumnya `p95` 33.3 ms dengan
+  7 frame jatuh saat expand (efektif 55 fps). Sesudahnya `p95` 16.8 ms di
+  seluruh pengukuran, 58–60 fps, tanpa frame di atas 34 ms.
+  - Panel dan pill sekarang berukuran tetap (`--panel-h`, 560 px) sehingga
+    isinya tidak di-reflow tiap frame — shell hanya memotong (clip).
+  - `backdrop-filter` dimatikan selama morph (`.is-morphing`) dan dipulihkan
+    setelah animasi selesai, karena blur harus di-raster ulang di setiap ukuran.
+  - `box-shadow` disamakan antara state pill dan panel supaya toggle tidak
+    memicu repaint area besar.
+  - `contain: layout paint`, `will-change` hanya aktif selama morph,
+    durasi 0.46 s.
+
+### Diperbaiki
+- **RAM selalu terbaca 0%** di status bar. Struct `Stats` di Rust mengirim
+  `mem_used`/`mem_total` (snake_case), sementara frontend membaca `memUsed`/
+  `memTotal`. Ditambahkan `#[serde(rename_all = "camelCase")]`.
+- **Lirik telat dari audio.** SMTC hanya memperbarui posisi sesekali; sekarang
+  posisi dikoreksi dengan selisih `LastUpdatedTime` → sekarang, dan interval
+  polling diturunkan 700 ms → 400 ms.
+
+### Ditambahkan
+- **Layout now-playing dua kolom**: judul/artis/sampul di kiri, lirik di kanan.
+- **Setelan → Lirik**: saklar hidup/mati dan penggeser sinkronisasi ±1000 ms
+  untuk mengoreksi kalau lirik masih terasa maju/mundur.
+- **Setelan → Tentang**: versi, lisensi, deskripsi singkat, dan tautan
+  repositori/rilis/laporan bug (dibuka di browser, bukan di webview).
+
+### Diubah
+- Saat musik diputar, pill menyembunyikan jam dan cuaca — hanya equalizer dan
+  judul lagu yang tampil, dan lebarnya mengecil 372 → 300 px.
+
+## [0.1.1] — 2026-10-26
+
+### Ditambahkan
+- **Lirik tersinkron** di tab Musik, diambil dari [LRCLIB](https://lrclib.net)
+  (gratis, tanpa API key) lalu dicocokkan ke posisi lagu. Baris aktif disorot
+  putih tebal, blok lirik auto-scroll dan memudar di tepi atas/bawah.
+- Cache lirik per lagu di localStorage, jadi lagu yang sama tidak di-fetch ulang.
+
+### Diubah
+- **Layout pemutar** jadi horizontal (sampul 96px di kiri, metadata di kanan)
+  supaya ada ruang untuk lirik.
+- **Animasi notch**: `backdrop-filter` diturunkan 30px→16px dan `saturate`
+  165%→120%, transisi `box-shadow` dihapus (memicu repaint area besar tiap
+  frame), ditambah `contain: layout paint style`, durasi 0.42s→0.5s.
+- **Sudut panel** memakai `corner-shape: squircle` (superellipse) dengan radius
+  30px, bukan busur lingkaran biasa.
+- `sysinfo` polling 2s → 15s saat panel tertutup.
+- `base64` 0.22 → 0.23.
+
+### Direncanakan
+- Auto-update lewat `tauri-plugin-updater`
+- Modul on/off dan tab default di Setelan
+
+## [0.1.0] — 2026-10-25
+
+Rilis pertama.
+
+### Ditambahkan
+- **Notch shell**: jendela transparan selalu di atas, morph pill ↔ panel dengan
+  animasi pegas, tinggi panel menyesuaikan isi tab.
+- **Hit-test kursor di Rust**: area transparan di bawah notch tidak menelan klik
+  milik aplikasi lain (`set_ignore_cursor_events` + polling 70 ms).
+- **Beranda**: jam besar, tanggal Indonesia, cuaca sekarang, prakiraan 5 hari,
+  strip per jam, tugas berikutnya.
+- **Musik via Windows SMTC**: judul, artis, album, sampul (stream → base64),
+  posisi, play/pause, next/prev, seek. Jalan dengan Spotify, YouTube Music, VLC,
+  dan aplikasi lain yang terdaftar di kontrol media Windows.
+- **Tugas**: tambah/centang/hapus, filter Semua/Aktif/Selesai, tersimpan lokal.
+- **Fokus**: Pomodoro 25/5/15 dengan ring progres dan hitungan sesi.
+- **Sistem**: CPU, RAM, inti, uptime lewat `sysinfo`.
+- **AI chat**: penyedia OpenAI-compatible (Gemini, OpenAI, Groq, OpenRouter,
+  DeepSeek, Ollama) dengan API key milik pengguna.
+- **Setelan**: aksen warna, ketebalan kaca, selalu di atas, kota cuaca, penyedia AI.
+- Tray icon + menu, hotkey global **Alt+N**.
+- Cuaca memakai Open-Meteo (tanpa API key).
+- CI: installer NSIS + GitHub Release otomatis pada tag `v*`.
+
+### Catatan teknis
+- Kode Rust diverifikasi dengan `cargo check --target x86_64-pc-windows-msvc`.
+- Belum ada code signing, jadi SmartScreen memberi peringatan saat pertama jalan.
+- Belum ada test otomatis (unit, widget, maupun golden).

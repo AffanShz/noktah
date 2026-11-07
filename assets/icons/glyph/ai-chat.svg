@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="180 180 664 664" width="512" height="512">
+<title>ai-chat (glyph)</title>
+
+<mask id="chg6" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+  <rect width="1024" height="1024" fill="#fff"/>
+  <path d="M478,344 Q478,462 596,462 Q478,462 478,580 Q478,462 360,462 Q478,462 478,344Z" fill="#000"/>
+  <path d="M650,324 Q650,372 698,372 Q650,372 650,420 Q650,372 602,372 Q650,372 650,324Z" fill="#000"/>
+</mask>
+<g fill="#FFFFFF" mask="url(#chg6)">
+  <rect x="212" y="252" width="600" height="440" rx="150"/>
+  <polygon points="292,610 246,790 440,672"/>
+</g>
+</svg>

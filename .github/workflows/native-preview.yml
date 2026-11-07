@@ -1,0 +1,125 @@
+name: native-preview
+
+# Membangun aplikasi Rust native dengan toolchain MSVC resmi Microsoft.
+#
+# MSVC dipakai — bukan MinGW — karena binary hasil MSVC memakai runtime
+# Microsoft dan jauh lebih jarang kena flag heuristik antivirus. Ini juga
+# toolchain yang akan dipakai untuk rilis final.
+#
+# Tidak menyentuh aplikasi Tauri dan tidak membuat release.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [develop]
+    paths:
+      - "native/**"
+      - ".github/workflows/native-preview.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build native (MSVC)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache Rust
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: native
+
+      - name: Test
+        working-directory: native
+        run: cargo test --workspace --target x86_64-pc-windows-msvc
+
+      - name: Build release
+        working-directory: native
+        run: cargo build --release --target x86_64-pc-windows-msvc
+
+      - name: Periksa hasil dan hitung hash
+        shell: pwsh
+        working-directory: native
+        run: |
+          $exe = "target/x86_64-pc-windows-msvc/release/noktah-native.exe"
+          $hook = "target/x86_64-pc-windows-msvc/release/noktah-hook.exe"
+          if (-not (Test-Path $exe)) { throw "exe tidak ditemukan di $exe" }
+          if (-not (Test-Path $hook)) { throw "noktah-hook.exe tidak ditemukan di $hook" }
+
+          $f = Get-Item $exe
+          $hash = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
+          $ver = $f.VersionInfo
+
+          Write-Host ("Ukuran    : {0:N2} MB" -f ($f.Length / 1MB))
+          Write-Host ("SHA-256   : {0}" -f $hash)
+          Write-Host ("Produk    : {0}" -f $ver.ProductName)
+          Write-Host ("Versi     : {0}" -f $ver.ProductVersion)
+
+          # Version info kosong berarti resource gagal ditanam — build seperti
+          # itu yang paling sering dituduh virus, jadi jangan diteruskan.
+          if ([string]::IsNullOrWhiteSpace($ver.ProductName)) {
+            throw "VERSIONINFO kosong: resource tidak tertanam"
+          }
+
+      - name: Susun paket unduhan
+        shell: pwsh
+        working-directory: native
+        run: |
+          $dir = "dist-msvc"
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          Copy-Item "target/x86_64-pc-windows-msvc/release/noktah-native.exe" $dir
+          Copy-Item "target/x86_64-pc-windows-msvc/release/noktah-hook.exe" $dir
+
+          $hash = (Get-FileHash "$dir/noktah-native.exe" -Algorithm SHA256).Hash.ToLower()
+          @"
+          Noktah — aplikasi Rust native
+          =============================
+
+          File     : noktah-native.exe
+          SHA256   : $hash
+          Pendamping: noktah-hook.exe
+          Sumber   : https://github.com/AffanShz/noktah
+          Build    : GitHub Actions, toolchain MSVC, profil release (LTO + strip)
+
+          Aplikasi ini adalah overlay notch: jendela transparan tanpa dekorasi
+          yang selalu di atas, membaca lagu dari SMTC, menampilkan lirik, tugas,
+          fokus, cuaca, dan chat AI.
+
+          Soal noktah-hook.exe
+          --------------------
+          Biner pendamping kecil untuk halaman Agent: ia yang meneruskan event
+          Claude Code (termasuk permintaan izin) ke Noktah. Simpan keduanya di
+          folder yang sama; tanpa file ini halaman Agent tidak berfungsi.
+
+          Catatan soal antivirus
+          ----------------------
+          File ini TIDAK ditandatangani secara digital. Pemindai bisa menandainya
+          sebagai ancaman heuristik karena bentuknya mirip overlay/keylogger —
+          padahal yang dilakukannya hanya menggambar di layar.
+
+          Kalau muncul peringatan:
+          1. Periksa SHA256 di atas sama dengan file yang kamu unduh.
+          2. Laporkan sebagai false positive:
+             https://www.microsoft.com/en-us/wdsi/filesubmission
+             (pilih "Software developer")
+          3. Atau tambahkan folder ini sebagai exclusion, jangan matikan
+             real-time protection secara global.
+          "@ | Set-Content "$dir/BACA-DULU.txt" -Encoding UTF8
+
+          Compress-Archive -Path "$dir/*" -DestinationPath "noktah-native-msvc.zip" -Force
+
+      - name: Upload paket
+        uses: actions/upload-artifact@v4
+        with:
+          name: noktah-native-msvc
+          if-no-files-found: error
+          path: native/noktah-native-msvc.zip
