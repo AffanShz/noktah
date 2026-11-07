@@ -118,7 +118,7 @@ jobs:
           Compress-Archive -Path "$dir/*" -DestinationPath "noktah-native-msvc.zip" -Force
 
       - name: Upload paket
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: noktah-native-msvc
           if-no-files-found: error
