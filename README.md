@@ -31,6 +31,22 @@ berisi jam dan suhu.
 
 ![Setelan](docs/settings.png)
 
+## Unduh
+
+Ambil `noktah-<versi>-win64.zip` dari
+[halaman Releases](https://github.com/AffanShz/noktah/releases), lalu ekstrak dan
+jalankan `noktah-native.exe`. Zip-nya juga berisi `noktah-hook.exe` (pendamping
+halaman Agent) dan `BACA-DULU.txt` berisi SHA-256 untuk memeriksa keutuhan file.
+
+Butuh Windows 10/11 64-bit. Tidak perlu install apa pun — tidak ada WebView2,
+tidak ada runtime tambahan, tidak ada hak admin.
+
+> **Windows protected your PC?** Klik **More info** → **Run anyway**. Aplikasi ini
+> belum ditandatangani secara digital, jadi SmartScreen dan sebagian pemindai
+> antivirus bisa memperingatkan karena bentuk overlay-nya mirip keylogger —
+> padahal yang dilakukannya hanya menggambar di layar.
+
+
 ## Fitur
 
 | Halaman | Isi |
