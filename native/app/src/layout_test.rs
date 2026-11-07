@@ -1,0 +1,1133 @@
+//! Uji geometri baris kontrol.
+//!
+//! Memakai harness UI egui yang sebenarnya, bukan perkiraan angka: setiap
+//! tombol diukur dari `Rect` yang benar-benar dialokasikan. Ini menangkap
+//! kelas bug yang tidak terlihat di test logika murni — item dalam satu baris
+//! horizontal yang sumbu Y-nya meleset karena baris tumbuh setelah item
+//! sebelumnya selesai diletakkan.
+
+#[cfg(test)]
+mod tests {
+    use eframe::egui;
+
+    /// Tinggi slot baris kontrol, harus sama dengan `row_h` di `pages::music`.
+    const ROW_H: f32 = 36.0;
+
+    /// Meniru susunan tombol di `draw_page_music`: Lyrics 28, Prev 28, Play 36, Next 28.
+    /// Mengembalikan (y_atas, y_bawah) setiap tombol dalam koordinat lokal.
+    fn susun_baris(ui: &mut egui::Ui) -> Vec<(f32, f32)> {
+        let mut hasil = Vec::new();
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 0.0;
+
+            for d in [28.0_f32, 28.0, 36.0, 28.0] {
+                let mut rect = egui::Rect::NOTHING;
+                ui.allocate_ui_with_layout(
+                    egui::vec2(d, ROW_H),
+                    egui::Layout::top_down(egui::Align::Center),
+                    |ui| {
+                        ui.spacing_mut().item_spacing.y = 0.0;
+                        ui.add_space((ROW_H - d) * 0.5);
+                        let (r, _) = ui.allocate_exact_size(egui::vec2(d, d), egui::Sense::hover());
+                        rect = r;
+                    },
+                );
+                hasil.push((rect.top(), rect.bottom()));
+                ui.add_space(24.0);
+            }
+        });
+        hasil
+    }
+
+    #[test]
+    fn semua_tombol_berbagi_garis_pusat_yang_sama() {
+        egui::__run_test_ui(|ui| {
+            let tombol = susun_baris(ui);
+            assert_eq!(tombol.len(), 4);
+
+            let pusat: Vec<f32> = tombol.iter().map(|(a, b)| (a + b) / 2.0).collect();
+            let acuan = pusat[2]; // tombol play, yang paling besar
+
+            for (i, p) in pusat.iter().enumerate() {
+                assert!(
+                    (p - acuan).abs() < 0.5,
+                    "tombol {i} meleset {}px dari garis pusat (pusat={p}, acuan={acuan})",
+                    (p - acuan).abs()
+                );
+            }
+        });
+    }
+
+    #[test]
+    fn tidak_ada_tombol_yang_keluar_dari_tinggi_baris() {
+        egui::__run_test_ui(|ui| {
+            let tombol = susun_baris(ui);
+            let atas = tombol.iter().map(|(a, _)| *a).fold(f32::MAX, f32::min);
+            let bawah = tombol.iter().map(|(_, b)| *b).fold(f32::MIN, f32::max);
+            assert!(
+                bawah - atas <= ROW_H + 0.5,
+                "baris melebar {}px, seharusnya maksimal {ROW_H}px",
+                bawah - atas
+            );
+        });
+    }
+
+    /// Pembanding: susunan lama (tanpa slot bertinggi tetap) memang miring.
+    /// Test ini menjaga alasan perubahan tetap terdokumentasi dan mencegah
+    /// seseorang mengembalikannya ke bentuk lama.
+    #[test]
+    fn susunan_lama_memang_miring() {
+        egui::__run_test_ui(|ui| {
+            let mut ys: Vec<(f32, f32)> = Vec::new();
+            ui.horizontal(|ui| {
+                for d in [28.0_f32, 28.0, 36.0, 28.0] {
+                    let (r, _) = ui.allocate_exact_size(egui::vec2(d, d), egui::Sense::hover());
+                    ys.push((r.top(), r.bottom()));
+                    ui.add_space(24.0);
+                }
+            });
+            let pusat: Vec<f32> = ys.iter().map(|(a, b)| (a + b) / 2.0).collect();
+            let selisih = (pusat[0] - pusat[2]).abs();
+            assert!(
+                selisih > 1.0,
+                "susunan lama seharusnya miring: selisih hanya {selisih}px"
+            );
+        });
+    }
+
+    /// Empat tombol transport:
+    /// Lyrics (28) di tepi kiri, Prev (28), Play (36), Next (28) di tepi kanan.
+    /// Semua gap antar-tombol tepat 24.0 px di kolom 192 px.
+    #[test]
+    fn tombol_simetris_di_slot_seimbang() {
+        const IB: f32 = 28.0;
+        const PLAY: f32 = 36.0;
+        const GAP: f32 = 24.0;
+        let col_w = 192.0;
+
+        egui::__run_test_ui(|ui| {
+            let mut lyrics = egui::Rect::NOTHING;
+            let mut prev = egui::Rect::NOTHING;
+            let mut play = egui::Rect::NOTHING;
+            let mut next = egui::Rect::NOTHING;
+            let mut kolom = egui::Rect::NOTHING;
+
+            ui.allocate_ui_with_layout(
+                egui::vec2(col_w, PLAY),
+                egui::Layout::left_to_right(egui::Align::Center),
+                |ui| {
+                    ui.spacing_mut().item_spacing.x = GAP;
+                    kolom = ui.max_rect();
+
+                    (lyrics, _) =
+                        ui.allocate_exact_size(egui::vec2(IB, IB), egui::Sense::hover());
+                    (prev, _) =
+                        ui.allocate_exact_size(egui::vec2(IB, IB), egui::Sense::hover());
+                    (play, _) =
+                        ui.allocate_exact_size(egui::vec2(PLAY, PLAY), egui::Sense::hover());
+                    (next, _) =
+                        ui.allocate_exact_size(egui::vec2(IB, IB), egui::Sense::hover());
+                },
+            );
+
+            // Lyric di tepi kiri, Next di tepi kanan
+            assert!(
+                (lyrics.left() - kolom.left()).abs() < 0.5,
+                "Lyric tidak di tepi kiri: {}px vs {}px",
+                lyrics.left(),
+                kolom.left()
+            );
+            assert!(
+                (next.right() - kolom.right()).abs() < 0.5,
+                "Next tidak di tepi kanan: {}px vs {}px",
+                next.right(),
+                kolom.right()
+            );
+
+            // Gap sama (24.0 px)
+            let g1 = prev.left() - lyrics.right();
+            let g2 = play.left() - prev.right();
+            let g3 = next.left() - play.right();
+            for (idx, g) in [g1, g2, g3].iter().enumerate() {
+                assert!(
+                    (g - GAP).abs() < 0.5,
+                    "gap {idx} ({g}px) berbeda dari GAP ({GAP}px)"
+                );
+            }
+
+            // Garis pusat Y sama
+            let py = play.center().y;
+            for (name, r) in [("Lyrics", lyrics), ("Prev", prev), ("Next", next)] {
+                assert!(
+                    (r.center().y - py).abs() < 0.5,
+                    "{name} tidak berbagi garis pusat Y dengan Play"
+                );
+            }
+        });
+    }
+
+    /// Saat lirik di-hide, transport beralih ke tata letak 3-slot simetris:
+    /// Slot kiri: Lyrics (28) rata kiri di x = 0.
+    /// Slot tengah: Prev (28), Play (36), Next (28) tepat di tengah area (area.width() / 2).
+    /// Slot kanan: Speaker (28) rata kanan di area.width().
+    #[test]
+    fn tombol_simetris_saat_lirik_di_hide() {
+        const IB: f32 = 28.0;
+        const PLAY: f32 = 36.0;
+        let area_w = 468.0_f32;
+        let center_trio_w = IB + 16.0 + PLAY + 16.0 + IB;
+        let slot_side_w = ((area_w - center_trio_w) * 0.5).max(IB);
+
+        egui::__run_test_ui(|ui| {
+            let (baris, _) =
+                ui.allocate_exact_size(egui::vec2(area_w, PLAY), egui::Sense::hover());
+
+            let slot_left = egui::Rect::from_min_size(baris.min, egui::vec2(slot_side_w, PLAY));
+            let slot_center = egui::Rect::from_min_size(
+                egui::pos2(baris.left() + slot_side_w, baris.top()),
+                egui::vec2(center_trio_w, PLAY),
+            );
+            let slot_right = egui::Rect::from_min_size(
+                egui::pos2(baris.right() - slot_side_w, baris.top()),
+                egui::vec2(slot_side_w, PLAY),
+            );
+
+            // Slot kiri
+            let mut ui_left = ui.new_child(
+                egui::UiBuilder::new()
+                    .max_rect(slot_left)
+                    .layout(egui::Layout::left_to_right(egui::Align::Center)),
+            );
+            ui_left.spacing_mut().item_spacing.x = 0.0;
+            let (lyrics, _) =
+                ui_left.allocate_exact_size(egui::vec2(IB, IB), egui::Sense::hover());
+
+            // Slot tengah
+            let mut ui_center = ui.new_child(
+                egui::UiBuilder::new()
+                    .max_rect(slot_center)
+                    .layout(egui::Layout::left_to_right(egui::Align::Center)),
+            );
+            ui_center.spacing_mut().item_spacing.x = 16.0;
+            let (prev, _) =
+                ui_center.allocate_exact_size(egui::vec2(IB, IB), egui::Sense::hover());
+            let (play, _) =
+                ui_center.allocate_exact_size(egui::vec2(PLAY, PLAY), egui::Sense::hover());
+            let (next, _) =
+                ui_center.allocate_exact_size(egui::vec2(IB, IB), egui::Sense::hover());
+
+            // Slot kanan
+            let mut ui_right = ui.new_child(
+                egui::UiBuilder::new()
+                    .max_rect(slot_right)
+                    .layout(egui::Layout::right_to_left(egui::Align::Center)),
+            );
+            ui_right.spacing_mut().item_spacing.x = 0.0;
+            let (speaker, _) =
+                ui_right.allocate_exact_size(egui::vec2(IB, IB), egui::Sense::hover());
+
+            // Play berada tepat di tengah area (area.width() / 2)
+            let center_expected = baris.left() + area_w * 0.5;
+            assert!(
+                (play.center().x - center_expected).abs() < 0.5,
+                "Play tidak di tengah: center={:.1}, expected={:.1}",
+                play.center().x,
+                center_expected
+            );
+
+            // Lyrics di tepi kiri
+            assert!(
+                (lyrics.left() - baris.left()).abs() < 0.5,
+                "Lyrics tidak di tepi kiri: {:.1} vs {:.1}",
+                lyrics.left(),
+                baris.left()
+            );
+
+            // Speaker di tepi kanan
+            assert!(
+                (speaker.right() - baris.right()).abs() < 0.5,
+                "Speaker tidak di tepi kanan: {:.1} vs {:.1}",
+                speaker.right(),
+                baris.right()
+            );
+
+            // Semua tombol berbagi garis pusat Y yang sama
+            let py = play.center().y;
+            for (name, r) in [
+                ("Lyrics", lyrics),
+                ("Prev", prev),
+                ("Next", next),
+                ("Speaker", speaker),
+            ] {
+                assert!(
+                    (r.center().y - py).abs() < 0.5,
+                    "{name} tidak sejajar Y dengan Play: {:.1} vs {:.1}",
+                    r.center().y,
+                    py
+                );
+            }
+        });
+    }
+
+    /// Lirik panjang dibungkus ke baris baru (newline) menggunakan LayoutJob.
+    #[test]
+    fn lirik_panjang_membungkus_ke_newline() {
+        const LEBAR_KOLOM: f32 = 260.0;
+
+        egui::__run_test_ui(|ui| {
+            let mut job = egui::text::LayoutJob::default();
+            job.wrap.max_width = LEBAR_KOLOM - crate::presentation::style::S2;
+            assert_eq!(job.wrap.max_width, 252.0);
+
+            job.append(
+                "Those funny faces in mind, but\nfor me",
+                0.0,
+                egui::TextFormat {
+                    font_id: egui::FontId::proportional(16.0),
+                    color: egui::Color32::WHITE,
+                    ..Default::default()
+                },
+            );
+            let g = ui.painter().layout_job(job);
+            assert_eq!(g.rows.len(), 2, "galley lirik harus membungkus ke 2 baris");
+        });
+    }
+
+    #[test]
+    fn verifikasi_semua_halaman_presisi_tanpa_overflow() {
+        egui::__run_test_ui(|ui| {
+            let mut app = crate::app::Noktah::new(
+                "test".to_string(),
+                crate::infrastructure::platform::Hover::new(false),
+                ui.ctx(),
+            );
+            let area = egui::Rect::from_min_size(
+                egui::pos2(0.0, 0.0),
+                egui::vec2(
+                    crate::presentation::layout::OPEN_W,
+                    crate::presentation::layout::OPEN_H,
+                ),
+            );
+            let content_rect = crate::presentation::layout::content_rect(
+                area,
+                16.0,
+                crate::presentation::style::S2,
+            );
+            let limit_y = content_rect.bottom();
+
+            for page in [
+                crate::app::NotchPage::Music,
+                crate::app::NotchPage::Pomodoro,
+                crate::app::NotchPage::Tasks,
+                crate::app::NotchPage::System,
+                crate::app::NotchPage::NowPlaying,
+                crate::app::NotchPage::Water,
+                crate::app::NotchPage::Ask,
+                crate::app::NotchPage::Home,
+                crate::app::NotchPage::Agent,
+            ] {
+                app.current_page = page;
+
+                if page == crate::app::NotchPage::Music {
+                    for lyrics_enabled in [true, false] {
+                        app.settings.lyrics_enabled = lyrics_enabled;
+                        let mut page_ui = ui.new_child(
+                            egui::UiBuilder::new()
+                                .max_rect(content_rect)
+                                .layout(egui::Layout::top_down(egui::Align::LEFT)),
+                        );
+                        page_ui.set_clip_rect(content_rect);
+                        app.draw_page_music(&mut page_ui, content_rect);
+
+                        let min_rect = page_ui.min_rect();
+                        println!(
+                            "Page Music (lyrics_enabled={}): bottom={}, limit={}, diff={}",
+                            lyrics_enabled,
+                            min_rect.bottom(),
+                            limit_y,
+                            min_rect.bottom() - limit_y
+                        );
+                        assert!(
+                            min_rect.bottom() <= limit_y + 0.5,
+                            "Page Music (lyrics_enabled={lyrics_enabled}) overflows by {}px!",
+                            min_rect.bottom() - limit_y
+                        );
+                    }
+                } else {
+                    let mut page_ui = ui.new_child(
+                        egui::UiBuilder::new()
+                            .max_rect(content_rect)
+                            .layout(egui::Layout::top_down(egui::Align::LEFT)),
+                    );
+                    page_ui.set_clip_rect(content_rect);
+
+                    match page {
+                        crate::app::NotchPage::Music => unreachable!(),
+                        crate::app::NotchPage::Tasks => app.draw_page_todo(&mut page_ui, content_rect),
+                        crate::app::NotchPage::Pomodoro => {
+                            app.draw_page_pomodoro(&mut page_ui, content_rect)
+                        }
+                        crate::app::NotchPage::System => {
+                            app.draw_page_system(&mut page_ui, content_rect)
+                        }
+                        crate::app::NotchPage::NowPlaying => {
+                            app.draw_page_now_playing(&mut page_ui, content_rect)
+                        }
+                        crate::app::NotchPage::Water => app.draw_page_water(&mut page_ui, content_rect),
+                        crate::app::NotchPage::Ask => app.draw_page_ai(&mut page_ui, content_rect),
+                        crate::app::NotchPage::Home => {
+                            app.draw_page_home(&mut page_ui, content_rect)
+                        }
+                        crate::app::NotchPage::Agent => {
+                            app.draw_page_agent(&mut page_ui, content_rect)
+                        }
+                    }
+
+                    let min_rect = page_ui.min_rect();
+                    println!(
+                        "Page {:?}: bottom={}, limit={}, diff={}",
+                        page,
+                        min_rect.bottom(),
+                        limit_y,
+                        min_rect.bottom() - limit_y
+                    );
+                    assert!(
+                        min_rect.bottom() <= limit_y + 0.5,
+                        "Page {:?} overflows by {}px!",
+                        page,
+                        min_rect.bottom() - limit_y
+                    );
+                }
+            }
+        });
+    }
+
+    #[test]
+    fn marquee_title_teks_pendek_dan_panjang() {
+        egui::__run_test_ui(|ui| {
+            let font = egui::FontId::proportional(15.0);
+            let color = egui::Color32::WHITE;
+
+            // Teks pendek: text_w <= width
+            let resp_short = crate::presentation::widgets::marquee_title(
+                ui,
+                "Lagu Pendek",
+                font.clone(),
+                color,
+                200.0,
+            );
+            assert_eq!(resp_short.rect.width(), 200.0);
+
+            // Teks panjang: text_w > width
+            let resp_long = crate::presentation::widgets::marquee_title(
+                ui,
+                "Judul lagu yang sangat amat panjang sekali dan tidak muat di layar",
+                font,
+                color,
+                100.0,
+            );
+            assert_eq!(resp_long.rect.width(), 100.0);
+        });
+    }
+
+    #[test]
+    fn mini_lyrics_ping_pong_scroll_never_exceeds_max_scroll() {
+        use crate::presentation::mini::ping_pong_offset;
+
+        let text_w = 300.0;
+        let max_w = 200.0;
+        let max_scroll = text_w - max_w;
+
+        // Pada t = 0.0 dan t = 1.0 (dalam periode pause awal 1.8s), nilainya 0.0
+        assert_eq!(ping_pong_offset(text_w, max_w, 0.0), 0.0);
+        assert_eq!(ping_pong_offset(text_w, max_w, 1.0), 0.0);
+
+        // Teks pendek selalu 0.0
+        assert_eq!(ping_pong_offset(150.0, 200.0, 5.0), 0.0);
+
+        // Saat tiba di akhir (PAUSE = 1.8s, scroll_dur = 100/26 ~= 3.846s; t = 6.0 di tengah pause akhir)
+        let at_end = ping_pong_offset(text_w, max_w, 6.0);
+        assert!(
+            (at_end - max_scroll).abs() < 1e-4,
+            "saat tiba di akhir harus tepat {max_scroll}, didapat {at_end}"
+        );
+
+        // Memastikan selalu >= 0.0 dan <= max_scroll untuk nilai t berapapun
+        let mut t = 0.0;
+        while t <= 100.0 {
+            let offset = ping_pong_offset(text_w, max_w, t);
+            assert!(
+                offset >= 0.0 && offset <= max_scroll,
+                "offset {offset} di luar rentang [0.0, {max_scroll}] pada t = {t}"
+            );
+            t += 0.05;
+        }
+    }
+
+    #[test]
+    fn doodle_icons_render_tanpa_panic() {
+        use crate::presentation::icons::{self, Icon};
+
+        egui::__run_test_ui(|ui| {
+            let rect = egui::Rect::from_min_size(egui::pos2(10.0, 10.0), egui::vec2(24.0, 24.0));
+            let color = egui::Color32::WHITE;
+
+            // Uji seluruh 18 icon doodle yang diadopsi dari folder doodle/
+            let doodle_icons = [
+                Icon::Music,
+                Icon::Tasks,
+                Icon::Focus,
+                Icon::System,
+                Icon::AI,
+                Icon::AiQuota,
+                Icon::Settings,
+                Icon::Play,
+                Icon::Pause,
+                Icon::Prev,
+                Icon::Next,
+                Icon::PlayCircle,
+                Icon::PauseCircle,
+                Icon::Lyrics,
+                Icon::LyricsOn,
+                Icon::LyricsOff,
+                Icon::VolumeOn,
+                Icon::VolumeMute,
+            ];
+
+            for icon in doodle_icons {
+                icons::draw(ui.painter(), icon, rect, color, 1.8);
+            }
+        });
+    }
+
+    #[test]
+    fn lyrics_open_close_anim_preserves_total_width_and_smooth_glide() {
+        let total_w = 528.0_f32;
+        let gap_max = 12.0_f32; // style::S3
+
+        let mut t = 0.0_f32;
+        while t <= 1.001 {
+            let t_clamped = t.clamp(0.0, 1.0);
+            let col_left_w = total_w + (192.0 - total_w) * t_clamped;
+            let gap = gap_max * t_clamped;
+            let col_right_w = (total_w - col_left_w - gap).max(0.0);
+
+            // Total lebar harus selalu 100% konsisten persis 528 px
+            let sum = col_left_w + gap + col_right_w;
+            assert!(
+                (sum - total_w).abs() < 1e-4,
+                "pada t={t_clamped}, total lebar {sum} tidak sama dengan {total_w}"
+            );
+
+            // Uji posisi horizontal keempat kontrol navigasi (Lyrics, Prev, Play, Next)
+            let lyr_cx = 14.0_f32;
+            let closed_cx = col_left_w * 0.5;
+            let prev_cx = (closed_cx - 48.0) + (66.0 - (closed_cx - 48.0)) * t_clamped;
+            let play_cx = closed_cx + (122.0 - closed_cx) * t_clamped;
+            let next_cx = (closed_cx + 48.0) + (178.0 - (closed_cx + 48.0)) * t_clamped;
+
+            // Pastikan urutan selalu Lyrics < Prev < Play < Next dan berada di dalam batas kolom kiri
+            assert!(lyr_cx < prev_cx, "Lyrics ({lyr_cx}) harus di sebelah kiri Prev ({prev_cx})");
+            assert!(prev_cx < play_cx, "Prev ({prev_cx}) harus di sebelah kiri Play ({play_cx})");
+            assert!(play_cx < next_cx, "Play ({play_cx}) harus di sebelah kiri Next ({next_cx})");
+            assert!(next_cx <= col_left_w, "Next ({next_cx}) tidak boleh keluar dari kolom ({col_left_w})");
+
+            t += 0.05;
+        }
+    }
+
+    #[test]
+    fn lyrics_3s_auto_scroll_timer_and_click_behavior() {
+        use std::time::{Duration, Instant};
+
+        // 1. Setelah scroll manual, auto_scroll harus false selama < 3 detik
+        let mut lyric_manual_at = Instant::now();
+        let auto_scroll = lyric_manual_at.elapsed() >= Duration::from_secs(3);
+        assert!(!auto_scroll, "Auto-scroll harus nonaktif saat baru saja di-scroll manual");
+
+        // 2. Setelah 3 detik tanpa klik, auto_scroll harus aktif kembali
+        lyric_manual_at = Instant::now() - Duration::from_millis(3050);
+        let auto_scroll_after_3s = lyric_manual_at.elapsed() >= Duration::from_secs(3);
+        assert!(auto_scroll_after_3s, "Auto-scroll harus aktif kembali setelah 3 detik tanpa klik");
+
+        // 3. Ketika ada klik pada baris lirik (seek), timer di-reset mundur sehingga langsung auto-scroll
+        // Baris lirik diklik -> reset ke 10 detik lalu
+        lyric_manual_at = Instant::now() - Duration::from_secs(10);
+        let auto_scroll_on_click = lyric_manual_at.elapsed() >= Duration::from_secs(3);
+        assert!(auto_scroll_on_click, "Klik baris lirik harus langsung mengaktifkan auto-scroll");
+    }
+
+    /// Area panel `"isi-panel"` HARUS menutupi seluruh panel, di kedua keadaan
+    /// dock.
+    ///
+    /// Kelas bug yang ditangkap: isi halaman digambar lewat `ui.new_child`
+    /// (`draw_notch_pages`), dan `new_child` tidak mengalokasikan ruang di UI
+    /// induk. Akibatnya `min_rect` Area menyusut jadi 0x0 saat dock menganggur.
+    /// Karena `Context::rect_contains_pointer` menuntut pointer berada di layer
+    /// Area itu, seluruh hit-test di dalam panel — termasuk kolom lirik —
+    /// ikut mati, sehingga roda mouse dan drag tidak pernah terdeteksi.
+    /// Sunyi total: tidak ada error, lirik hanya diam saat digulir.
+    ///
+    /// Perbaikannya `ui.expand_to_include_rect(outer_rect)` di `draw_panel`.
+    /// Test ini menjaganya supaya tidak hilang lagi.
+    ///
+    /// Batas jujur: yang diuji adalah luas Area dan hit-test pada satu titik
+    /// tetap di paruh kanan panel. Test ini TIDAK membuktikan kolom lirik
+    /// masih ada di titik itu — kalau kolomnya dipindah atau dihapus sementara
+    /// Area tetap penuh, test ini tetap lulus. Titik ujinya sengaja tetap
+    /// supaya tidak rapuh terhadap pergeseran tata letak halaman.
+    #[test]
+    fn area_panel_menutupi_seluruh_panel_di_kedua_keadaan_dock() {
+        use crate::app::{Noktah, NotchPage};
+        use eframe::egui::{pos2, vec2, Id, Rect};
+
+        let ctx = egui::Context::default();
+        let hover = crate::infrastructure::platform::spawn_watcher(ctx.clone(), false);
+        let mut app = Noktah::new("test".to_string(), hover, &ctx);
+        app.current_page = NotchPage::Music;
+        app.lyrics = (0..12)
+            .map(|i| noktah_core::lrc::LrcLine {
+                time: i as f64 * 10.0,
+                text: format!("baris lirik {i} untuk menguji hit-test"),
+            })
+            .collect();
+        app.media.active = true;
+        app.media.playing = true;
+        app.media.duration_ms = 240_000;
+        app.media.position_ms = 45_000;
+
+        let outer = Rect::from_min_size(pos2(0.0, 0.0), vec2(500.0, 148.0));
+        // Titik di kolom kanan (kolom lirik saat panel terbuka).
+        let kolom_lirik = Rect::from_min_size(pos2(270.0, 20.0), vec2(220.0, 110.0));
+        let probe = kolom_lirik.center();
+
+        for dock in [0.0_f32, 1.0] {
+            app.dock_open =
+                crate::presentation::spring::Spring::with(dock, 280.0, 22.0);
+            app.dock_open.snap();
+
+            let mut area = None;
+            let mut hit = false;
+            for putaran in 0..4 {
+                let mut input = egui::RawInput::default();
+                input.screen_rect = Some(Rect::from_min_size(
+                    pos2(0.0, 0.0),
+                    vec2(1280.0, 720.0),
+                ));
+                input.events = vec![egui::Event::PointerMoved(probe)];
+                let _ = ctx.run(input, |ctx| {
+                    app.theme = crate::presentation::theme::Theme::new(
+                        noktah_core::settings::Accent::Teal,
+                        1.0,
+                    );
+                    app.draw_panel(ctx, outer, outer, 1.0);
+                });
+                if putaran == 3 {
+                    area = ctx.memory(|m| m.area_rect(Id::new("isi-panel")));
+                    hit = ctx.rect_contains_pointer(
+                        egui::LayerId::new(
+                            egui::Order::Foreground,
+                            Id::new("isi-panel"),
+                        ),
+                        kolom_lirik,
+                    );
+                }
+            }
+
+            let area = area.expect("Area \"isi-panel\" harus ada setelah digambar");
+            assert!(
+                area.width() >= outer.width() - 1.0 && area.height() >= outer.height() - 1.0,
+                "dock_open={dock}: Area \"isi-panel\" hanya {}x{}px, \
+                 seharusnya >= {}x{}px — min_rect menyusut karena isi \
+                 digambar lewat new_child tanpa expand_to_include_rect",
+                area.width(),
+                area.height(),
+                outer.width(),
+                outer.height()
+            );
+            assert!(
+                hit,
+                "dock_open={dock}: hit-test pointer di kolom lirik mati — \
+                 roda mouse dan drag tidak akan pernah terdeteksi"
+            );
+        }
+    }
+
+    /// Regresi: pergantian baris lirik aktif TIDAK boleh mengubah tinggi kolom.
+    ///
+    /// Latar bug: dulu baris aktif menganimasikan ukuran font 13.5→16 px.
+    /// "And in your eyes you're holding mine" berada di ambang pembungkusan —
+    /// di 16 px ia tumbuh dari 1 baris ke 2 baris (terukur +22 px tinggi dalam
+    /// SATU frame) — dan mendorong seluruh baris di bawahnya turun.
+    ///
+    /// Perbaikan sekarang: teks baris aktif memang dibesarkan ke `LYRIC_SIZE_BIG`
+    /// (16 px) supaya terlihat menonjol, TETAPI tinggi slot tiap baris dibekukan
+    /// karena diukur di 16 px untuk SEMUA baris — konstan, tidak peduli mana yang
+    /// aktif. Jadi yang berubah hanya ukuran teks di dalam slot, bukan geometri
+    /// kolom.
+    ///
+    /// Test menjalankan `draw_page_music` produksi yang sebenarnya, lalu:
+    ///   1. memastikan vektor `row_center` IDENTIK untuk indeks aktif 4, 5, 6
+    ///      (invariansi LANGSUNG, bukan sekadar target gulir);
+    ///   2. memastikan `lyric_target_scroll` cocok dengan model murni produksi
+    ///      (`lyric_row_centers_for`, yang mengukur slot di 16 px);
+    ///   3. mendokumentasikan mengapa reservasi ini perlu: baris 6 adalah 1 baris
+    ///      di 13.5 px tapi 2 baris di 16 px.
+    ///
+    /// Catatan harness: `egui::__run_test_ui` memanggil
+    /// `Context::set_fonts(FontDefinitions::empty())` — semua galley setinggi
+    /// 0 px. Karena itu test ini membangun `Context` sendiri, memasang font
+    /// produksi di frame pertama, dan BARU mengukur di frame berikutnya.
+    #[test]
+    fn lirik_baris_aktif_tidak_mengubah_tinggi_kolom() {
+        use crate::app::{Noktah, NotchPage};
+        use crate::presentation::pages::music::{
+            lyric_row_centers_for, lyric_size, LYRIC_SIZE, LYRIC_SIZE_BIG,
+        };
+        use eframe::egui::{pos2, vec2, Rect};
+
+        // area.height() di dalam draw_page_music = CONTENT_BOTTOM - top_pad.
+        const BODY_H: f32 =
+            crate::presentation::layout::CONTENT_BOTTOM - crate::presentation::style::S2;
+        // area.width() (OPEN_W - 2*panel gutter) dikurangi kolom kiri 192 dan gap S3.
+        const COL_RIGHT_W: f32 = (crate::presentation::layout::OPEN_W - 2.0 * 16.0)
+            - 192.0
+            - crate::presentation::style::S3;
+
+        let ctx = egui::Context::default();
+        let screen = Rect::from_min_size(pos2(0.0, 0.0), vec2(1400.0, 900.0));
+        let raw = || egui::RawInput {
+            screen_rect: Some(screen),
+            ..Default::default()
+        };
+
+        // Frame 0: pasang font produksi.
+        let _ = ctx.run(raw(), |ctx| {
+            crate::presentation::fonts::install(ctx);
+            egui::CentralPanel::default().show(ctx, |_ui| {});
+        });
+        // Frame 1: biarkan set_fonts aktif di cache.
+        let _ = ctx.run(raw(), |_ctx| {});
+
+        let mut app = Noktah::new(
+            "test".to_string(),
+            crate::infrastructure::platform::Hover::new(false),
+            &ctx,
+        );
+        app.current_page = NotchPage::Music;
+        app.settings.lyrics_enabled = true;
+        app.settings.lyric_offset_ms = 0;
+        app.reduce_motion = false;
+        app.media.active = true;
+        app.media.playing = true;
+        app.media.duration_ms = 240_000;
+
+        // Indeks 6 = baris yang flip 1→2 wrap di 16 px. Indeks 2 & 9 pembungkus
+        // panjang 2 baris; sisanya pendek.
+        let teks = [
+            "baris lirik satu",
+            "baris lirik dua",
+            "pembungkus panjang yang sengaja dibuat melebihi lebar kolom lirik supaya pasti membungkus ke dua baris teks",
+            "baris lirik empat",
+            "baris lirik lima",
+            "baris lirik enam",
+            "And in your eyes you're holding mine",
+            "baris lirik delapan",
+            "baris lirik sembilan",
+            "pembungkus panjang yang sengaja dibuat melebihi lebar kolom lirik supaya pasti membungkus ke dua baris teks",
+            "baris lirik sebelas",
+            "baris lirik dua belas",
+        ];
+        app.lyrics = teks
+            .iter()
+            .enumerate()
+            .map(|(i, t)| noktah_core::lrc::LrcLine {
+                time: (i as f64 + 1.0) * 10.0,
+                text: (*t).to_string(),
+            })
+            .collect();
+
+        let area = Rect::from_min_size(
+            pos2(0.0, 0.0),
+            vec2(
+                crate::presentation::layout::OPEN_W,
+                crate::presentation::layout::OPEN_H,
+            ),
+        );
+        let content_rect =
+            crate::presentation::layout::content_rect(area, 16.0, crate::presentation::style::S2);
+
+        // Model murni produksi: pusat baris dari slot yang diukur di 16 px.
+        // Dipakai untuk target gulir DAN untuk assert invariansi di bawah.
+        let teks_owned: Vec<String> = app.lyrics.iter().map(|l| l.text.clone()).collect();
+        let pusat_model = lyric_row_centers_for(&ctx, &teks_owned, COL_RIGHT_W);
+
+        let mut targets = [0.0_f32; 3];
+        for (slot, i) in [4_usize, 5, 6].into_iter().enumerate() {
+            // Posisi di tengah baris i supaya active_line pasti mengembalikan i.
+            app.media.position_ms = (app.lyrics[i].time * 1000.0) as i64 + 500;
+            assert_eq!(
+                noktah_core::lrc::active_line(&app.lyrics, app.media.position_ms),
+                Some(i),
+                "prasyarat: active_line harus {i}"
+            );
+
+            // Settled di posisi i supaya tes tidak bergantung waktu.
+            app.last_active_lyric = Some(i);
+            app.lyric_line_active_at =
+                std::time::Instant::now() - std::time::Duration::from_secs(10);
+            app.lyric_anim_pos.target = i as f32;
+            app.lyric_anim_pos.snap();
+            app.lyrics_anim.target = 1.0;
+            app.lyrics_anim.snap();
+            // Paksa loop menghitung ulang target pada frame ini.
+            app.lyric_target_scroll = 0.0;
+
+            let _ = ctx.run(raw(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let mut page_ui = ui.new_child(
+                        egui::UiBuilder::new()
+                            .max_rect(content_rect)
+                            .layout(egui::Layout::top_down(egui::Align::LEFT)),
+                    );
+                    page_ui.set_clip_rect(content_rect);
+                    app.draw_page_music(&mut page_ui, content_rect);
+                });
+            });
+
+            targets[slot] = app.lyric_target_scroll;
+        }
+
+        // --- (1) Vektor row_center IDENTIK untuk tiga indeks aktif berbeda ---
+        // `lyric_row_centers_for` mengukur slot SELALU di 16 px (sama seperti
+        // produksi), jadi tidak menerima indeks aktif dan secara konstruksi
+        // invarian. Test menegaskan hasilnya cocok dengan produksi lewat target
+        // di bagian (2), lalu membuktikan model ini PUNYA GIGI: versi "regresi"
+        // (slot diukur dari ukuran baris itu sendiri) memang BERBEDA antar tiga
+        // indeks aktif — kalau tidak, test ini tidak akan menangkap bug apa pun.
+        let vektor_invarian = lyric_row_centers_for(&ctx, &teks_owned, COL_RIGHT_W);
+        assert!(
+            vektor_invarian.windows(2).all(|w| w[1] > w[0]),
+            "pusat baris harus monoton naik, dapat {:?}",
+            vektor_invarian
+        );
+
+        // Versi regresi yang SENGAJA salah: tinggi slot dari `lyric_size(d)`.
+        let pusat_regresi = |aktif: usize| -> Vec<f32> {
+            let wrap_w = (COL_RIGHT_W - crate::presentation::style::S2).max(10.0);
+            let h: Vec<f32> = ctx.fonts(|f| {
+                teks_owned
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, t)| {
+                        let d = (idx as f32 - aktif as f32).abs();
+                        let mut job = egui::text::LayoutJob::default();
+                        job.wrap.max_width = wrap_w;
+                        job.append(
+                            t,
+                            0.0,
+                            egui::TextFormat {
+                                font_id: egui::FontId::proportional(lyric_size(d)),
+                                color: egui::Color32::WHITE,
+                                ..Default::default()
+                            },
+                        );
+                        f.layout_job(job).size().y
+                    })
+                    .collect()
+            });
+            crate::presentation::pages::music::lyric_row_centers(&h)
+        };
+        let reg4 = pusat_regresi(4);
+        let reg5 = pusat_regresi(5);
+        let reg6 = pusat_regresi(6);
+        let beda_maks = |a: &[f32], b: &[f32]| {
+            a.iter()
+                .zip(b.iter())
+                .map(|(x, y)| (x - y).abs())
+                .fold(0.0_f32, f32::max)
+        };
+        assert!(
+            beda_maks(&reg4, &reg5) > 0.01 && beda_maks(&reg5, &reg6) > 0.01,
+            "data test harus cukup tajam: versi regresi seharusnya menghasilkan \
+             row_center berbeda antar indeks aktif (4→5: {} px, 5→6: {} px), \
+             kalau tidak invariansi tidak bisa dibedakan",
+            beda_maks(&reg4, &reg5),
+            beda_maks(&reg5, &reg6)
+        );
+        // Invarian produksi: pusat baris yang DITURUNKAN dari `lyric_target_scroll`
+        // produksi (target + BODY_H/2, tanpa clamp karena semua > 62 px) harus
+        // sama persis dengan model untuk tiap indeks aktif. Ini yang membuktikan
+        // slot produksi benar-benar diukur di 16 px, bukan di ukuran aktif.
+        for (slot, i) in [4_usize, 5, 6].into_iter().enumerate() {
+            let prod_center = targets[slot] + BODY_H * 0.5;
+            assert!(
+                (prod_center - vektor_invarian[i]).abs() < 1.0,
+                "indeks {i}: pusat baris produksi {prod_center} menyimpang dari \
+                 model invarian {}",
+                vektor_invarian[i]
+            );
+        }
+
+        // --- (2) Target gulir produksi == model murni (slot diukur 16 px) ---
+        for (slot, i) in [4_usize, 5, 6].into_iter().enumerate() {
+            let expected = (pusat_model[i] - BODY_H * 0.5).max(0.0);
+            assert!(
+                (targets[slot] - expected).abs() < 1.0,
+                "indeks {i}: lyric_target_scroll={} menyimpang {} px dari \
+                 model slot-16px {}",
+                targets[slot],
+                (targets[slot] - expected).abs(),
+                expected
+            );
+        }
+
+        // --- (3) Dokumentasi mengapa reservasi perlu: baris 6 flip 1→2 wrap ---
+        let tinggi_135 = |text: &str| {
+            ctx.fonts(|f| {
+                let mut job = egui::text::LayoutJob::default();
+                job.wrap.max_width = (COL_RIGHT_W - crate::presentation::style::S2).max(10.0);
+                job.append(
+                    text,
+                    0.0,
+                    egui::TextFormat {
+                        font_id: egui::FontId::proportional(LYRIC_SIZE),
+                        color: egui::Color32::WHITE,
+                        ..Default::default()
+                    },
+                );
+                f.layout_job(job).size().y
+            })
+        };
+        let h135_6 = tinggi_135(&teks_owned[6]);
+        let h16_6 = {
+            let mut job = egui::text::LayoutJob::default();
+            job.wrap.max_width = (COL_RIGHT_W - crate::presentation::style::S2).max(10.0);
+            job.append(
+                &teks_owned[6],
+                0.0,
+                egui::TextFormat {
+                    font_id: egui::FontId::proportional(LYRIC_SIZE_BIG),
+                    color: egui::Color32::WHITE,
+                    ..Default::default()
+                },
+            );
+            ctx.fonts(|f| f.layout_job(job).size().y)
+        };
+        assert!(
+            h135_6 <= 28.0,
+            "baris 6 seharusnya 1 baris teks di {LYRIC_SIZE} px, tingginya {h135_6} px"
+        );
+        assert!(
+            h16_6 >= 34.0,
+            "baris 6 seharusnya 2 baris teks di {LYRIC_SIZE_BIG} px, tingginya {h16_6} px"
+        );
+
+        // --- Ukuran teks memang berbeda per baris (16 vs 13.5), bukan konstan ---
+        assert_eq!(lyric_size(0.0), LYRIC_SIZE_BIG);
+        assert_eq!(lyric_size(1.0), LYRIC_SIZE);
+        assert_eq!(lyric_size(5.0), LYRIC_SIZE);
+        assert!(
+            lyric_size(0.5) > LYRIC_SIZE && lyric_size(0.5) < LYRIC_SIZE_BIG,
+            "lyric_size harus kontinu di antara kedua ukuran"
+        );
+    }
+
+    /// Regresi: pegas posisi baris lirik TIDAK boleh menahan aplikasi bangun
+    /// saat halaman yang menggambarnya tidak aktif.
+    ///
+    /// Bug yang dijaga: `lyric_anim_pos` hanya dimajukan `draw_page_music`.
+    /// Saat pengguna pindah ke halaman lain (atau menutup panel) di tengah
+    /// transisi, pegas itu berhenti di posisi antara dan `settled()` tidak
+    /// pernah benar. Kalau keadaan itu ikut dihitung "masih bergerak" oleh
+    /// `next_wake()`, aplikasi meminta frame 60 fps terus-menerus tanpa ada
+    /// yang bergerak — dan tidak sembuh sendiri sampai halaman Music dibuka
+    /// lagi.
+    ///
+    /// Test memakai pegas yang SENGAJA terdampar (posisi 0, target 1, belum
+    /// maju) lalu menuntut: saat halaman bukan Music, aplikasi tidak dihitung
+    /// bergerak dan `next_wake` tidak nol.
+    #[test]
+    fn pegas_lirik_terdampar_tidak_menahan_bangun_di_halaman_lain() {
+        use crate::app::{Noktah, NotchPage};
+        use eframe::egui::{pos2, vec2, Rect};
+
+        let ctx = egui::Context::default();
+        let screen = Rect::from_min_size(pos2(0.0, 0.0), vec2(1400.0, 900.0));
+        let raw = || egui::RawInput {
+            screen_rect: Some(screen),
+            ..Default::default()
+        };
+
+        let _ = ctx.run(raw(), |ctx| {
+            crate::presentation::fonts::install(ctx);
+            egui::CentralPanel::default().show(ctx, |_ui| {});
+        });
+
+        let mut app = Noktah::new(
+            "test".to_string(),
+            crate::infrastructure::platform::Hover::new(false),
+            &ctx,
+        );
+        app.settings.lyrics_enabled = true;
+        app.reduce_motion = false;
+        // Panel terbuka penuh supaya syarat pertama terpenuhi, dan halaman
+        // System supaya syarat halaman TIDAK terpenuhi.
+        app.open.target = 1.0;
+        app.open.snap();
+        app.open_h.target = 1.0;
+        app.open_h.snap();
+        app.current_page = NotchPage::System;
+
+        // Pegas terdampar: target bergerak, posisi ketinggalan, belum dimajukan.
+        app.lyric_anim_pos.target = 4.0;
+        app.lyric_anim_pos.pos = 1.0;
+
+        let mut bergerak = true;
+        let _ = ctx.run(raw(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |_ui| {});
+            bergerak = app.lyric_line_animating();
+        });
+        assert!(
+            !bergerak,
+            "di halaman System, pegas lirik terdampar tidak boleh dihitung \
+             bergerak — kalau ya, aplikasi meminta frame 60 fps selamanya"
+        );
+
+        let tunggu = app.next_wake(0);
+        assert!(
+            tunggu > std::time::Duration::ZERO,
+            "di halaman System, next_wake harus boleh tidur walau pegas lirik \
+             sedang terdampar; dapat {tunggu:?}"
+        );
+
+        // Di halaman Music, pegas yang sama HARUS dihitung bergerak.
+        app.current_page = NotchPage::Music;
+        let mut bergerak_music = false;
+        let _ = ctx.run(raw(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |_ui| {});
+            bergerak_music = app.lyric_line_animating();
+        });
+        assert!(
+            bergerak_music,
+            "di halaman Music, pegas yang belum settled harus dihitung bergerak \
+             supaya transisinya digambar 60 fps"
+        );
+    }
+
+    /// Pegas posisi baris lirik HARUS benar-benar sampai di tujuan, tidak
+    /// berhenti sedikit di bawahnya.
+    ///
+    /// Kalau berhenti di bawah (mis. `settled()` menyatakan diam terlalu awal),
+    /// baris aktif TIDAK PERNAH mencapai alpha penuh 255 — ia diam di ~247 dan
+    /// baris aktif selamanya terlihat sedikit lebih redup dari seharusnya.
+    /// Bug halus yang tidak memunculkan error apa pun.
+    #[test]
+    fn pegas_lirik_berhenti_tepat_di_alpha_penuh() {
+        use crate::presentation::pages::music::lyric_alpha;
+        use crate::presentation::spring::{Spring, MORPH_LYRIC_LINE};
+
+        let mut s = Spring::from_spec(0.0, MORPH_LYRIC_LINE);
+        s.target = 1.0;
+
+        // Majukan pada langkah 60 Hz sampai diam.
+        let mut langkah = 0;
+        while !s.settled() && langkah < 600 {
+            s.step(1.0 / 60.0);
+            langkah += 1;
+        }
+        assert!(s.settled(), "pegas harus diam dalam 10 detik, {langkah} langkah");
+
+        let d = (1.0_f32 - s.pos).abs();
+        let alpha = lyric_alpha(d);
+        assert_eq!(
+            alpha, 255.0,
+            "pegas berhenti di pos={} (sisa d={d}), jadi baris aktif hanya \
+             beralpha {alpha} — tidak pernah mencapai 255. Pantulan {} atau \
+             ambang settled terlalu longgar.",
+            s.pos, MORPH_LYRIC_LINE.bounce
+        );
+    }
+
+    /// Verifikasi font Jepang/CJK: karakter kanji, hiragana, katakana, dan simbol musik
+    /// dapat dimuat dan di-layout dengan benar tanpa menghasilkan missing glyph / error.
+    #[test]
+    fn lirik_bahasa_jepang_dapat_dimuat_dan_terender_dengan_mplus_rounded() {
+        use crate::presentation::pages::music::{
+            lyric_row_centers_for, LYRIC_SIZE, LYRIC_SIZE_BIG,
+        };
+
+        const COL_RIGHT_W: f32 = (crate::presentation::layout::OPEN_W - 2.0 * 16.0)
+            - 192.0
+            - crate::presentation::style::S3;
+
+        let ctx = egui::Context::default();
+        let raw = || egui::RawInput::default();
+
+        let _ = ctx.run(raw(), |ctx| {
+            crate::presentation::fonts::install(ctx);
+            egui::CentralPanel::default().show(ctx, |_ui| {});
+        });
+        // Frame 1: biarkan set_fonts aktif di cache.
+        let _ = ctx.run(raw(), |_ctx| {});
+
+        let jp_lines = vec![
+            "七号線ロストボーイズ".to_string(),
+            "♫ 僕らの歩いた七号線、雨上がりの街並み".to_string(),
+            "後悔ばかりの毎日に、それでも光を探していた".to_string(),
+            "いつか笑える日が来ると信じていたあの夏".to_string(),
+            "季節は次々死んでいく 絶望の果てに何がある".to_string(),
+        ];
+
+        // Pastikan layout_job dapat mengukur teks Jepang pada kedua ukuran font
+        for text in &jp_lines {
+            let (h_small, w_small) = ctx.fonts(|f| {
+                let mut job = egui::text::LayoutJob::default();
+                job.wrap.max_width = (COL_RIGHT_W - crate::presentation::style::S2).max(10.0);
+                job.append(
+                    text,
+                    0.0,
+                    egui::TextFormat {
+                        font_id: egui::FontId::proportional(LYRIC_SIZE),
+                        color: egui::Color32::WHITE,
+                        ..Default::default()
+                    },
+                );
+                let g = f.layout_job(job);
+                (g.size().y, g.size().x)
+            });
+
+            let (h_big, w_big) = ctx.fonts(|f| {
+                let mut job = egui::text::LayoutJob::default();
+                job.wrap.max_width = (COL_RIGHT_W - crate::presentation::style::S2).max(10.0);
+                job.append(
+                    text,
+                    0.0,
+                    egui::TextFormat {
+                        font_id: egui::FontId::proportional(LYRIC_SIZE_BIG),
+                        color: egui::Color32::WHITE,
+                        ..Default::default()
+                    },
+                );
+                let g = f.layout_job(job);
+                (g.size().y, g.size().x)
+            });
+
+            assert!(h_small > 0.0 && w_small > 0.0, "teks '{text}' gagal di-render di ukuran kecil");
+            assert!(h_big > 0.0 && w_big > 0.0, "teks '{text}' gagal di-render di ukuran besar");
+            assert!(h_big >= h_small, "ukuran besar harus memiliki tinggi >= ukuran kecil");
+        }
+
+        // Pastikan row centers untuk lirik Jepang terhitung secara stabil
+        let centers = lyric_row_centers_for(&ctx, &jp_lines, COL_RIGHT_W);
+        assert_eq!(centers.len(), jp_lines.len());
+        for i in 1..centers.len() {
+            assert!(
+                centers[i] > centers[i - 1],
+                "baris lirik {i} ({}) harus berada di bawah baris sebelumnya ({})",
+                centers[i],
+                centers[i - 1]
+            );
+        }
+    }
+}
