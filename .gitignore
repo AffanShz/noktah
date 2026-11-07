@@ -1,0 +1,45 @@
+# Log
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Rust — workspace native
+target/
+# Cargo keluar artefak ini di root workspace saat build
+native/dist/
+native/dist-msvc/
+*.pdb
+
+# Paket rilis dan biner Windows
+*.zip
+*.exe
+*.dll
+*.msi
+
+# Rahasia — jangan pernah masuk repo
+.env
+.env.*
+secret.json
+secret.bin
+*.key
+*.pem
+
+# Preview lokal
+.preview
+
+# Editor dan OS
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+Thumbs.db
+desktop.ini
