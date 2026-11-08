@@ -1,9 +1,8 @@
 # Noktah
 
 Notch interaktif untuk Windows 10/11. Satu titik kecil di tengah atas layar —
-jam, musik, lirik, tugas, timer fokus, hidrasi, statistik sistem, kuota, dan chat
-AI — semuanya muncul begitu kursor didekatkan, lalu mengecil lagi saat kursor
-pergi.
+jam, musik, lirik, tugas, timer fokus, statistik sistem, kuota, dan chat AI —
+semuanya muncul begitu kursor didekatkan, lalu mengecil lagi saat kursor pergi.
 
 Dibangun sebagai **aplikasi Rust native** dengan `egui`/`eframe`. Tidak ada
 WebView, tidak ada runtime tambahan: satu exe sekitar 9 MB yang langsung
@@ -59,20 +58,28 @@ tidak ada runtime tambahan, tidak ada hak admin.
 
 ## Halaman
 
-Sembilan halaman, dan tujuh di antaranya ikut siklus tombol chevron di bilah
-bawah.
+Tujuh halaman bisa dibuka lewat bilah bawah dan tombol chevron:
 
 | Halaman | Isi |
 | --- | --- |
 | **Beranda** | Lagu yang sedang diputar (ringkas, tanpa lirik) dan sisa kuota Antigravity dari 9Router — dua cincin (sesi & minggu) plus tombol segarkan |
 | **Musik** | Pemutar dari Windows SMTC: sampul album, judul/artis/album, progres yang bisa diklik, play/pause, next/prev, dan lirik tersinkron |
-| **Tugas** | Tambah/centang/hapus, tersimpan lokal |
 | **Fokus** | Timer Pomodoro dengan cincin progres dan hitungan sesi |
+| **Tugas** | Tambah/centang/hapus, tersimpan lokal |
 | **Sistem** | Cuaca, CPU, dan memori sebagai tiga kartu, dengan sparkline |
 | **Tanya** | Chat AI streaming dengan API key sendiri: Gemini, OpenAI, OpenRouter, Groq, DeepSeek, atau Ollama lokal |
 | **Agent** | Status Claude Code dan persetujuan izin langsung dari notch, dengan maskot Noki |
-| **Hidrasi** | Pencatat minum: cincin di kiri, status dan baris aksi di kanan, dengan tombol reset manual |
-| **Now Playing** | Pemutar mini satu kolom tanpa lirik, posisi tombol transport identik dengan halaman Musik |
+
+Urutannya persis seperti di bilah bawah: Beranda, Musik, Fokus, Tugas, Sistem,
+Tanya, Agent. Halaman Agent juga terbuka sendiri saat ada permintaan izin.
+
+### Dua halaman yang belum bisa dibuka
+
+`Hidrasi` (pencatat minum) dan `Now Playing` (pemutar mini satu kolom) sudah
+punya kode gambarnya lengkap, tapi **belum ada satu pun jalur untuk
+membukanya** — keduanya tidak ada di bilah bawah maupun siklus chevron, dan
+tidak ada tombol lain yang mengarah ke sana. Untuk sekarang keduanya hanya
+muncul di test.
 
 ## Baris minimized
 
@@ -85,12 +92,15 @@ kombinasinya sekaligus:
 | **Standar** | Sampul, judul, waveform, progres, jam, agent |
 | **Mode Lirik** | Sampul, lirik, waveform, progres, agent |
 | **Fokus Lirik** | Lirik dan progres saja |
-| **Lengkap** | Semuanya |
+| **Lengkap** | Kedelapan item preset menyala |
+
+Preset mengatur delapan item itu; **CPU dan RAM punya saklarnya sendiri** dan
+tidak ikut berubah saat kamu memilih preset.
 
 Item yang bisa dinyalakan: sampul, judul, lirik, kontrol transport, waveform,
 progres, jam, CPU, RAM, dan agent. Lebarnya dihitung dari item yang menyala
 saja, jadi pill ikut menyusut. Lirik yang tidak muat bergulir sendiri
-(~42 px/detik, putaran mulus tanpa lompatan); teks yang muat tetap diam.
+(~26 px/detik, bolak-balik dengan jeda di kedua ujung); teks yang muat tetap diam.
 
 ## Mengendalikan notch
 
@@ -135,7 +145,7 @@ Lirik diambil berurutan dari empat sumber sampai ada yang cocok:
 4. KuGou
 
 Hasilnya di-cache ke disk, jadi lagu yang sama tidak diambil dua kali. Baris
-yang bisa diklik bekerja sebagai seek, dan auto-scroll berhenti 4 detik setelah
+yang bisa diklik bekerja sebagai seek, dan auto-scroll berhenti 3 detik setelah
 kamu memilih baris supaya sempat dibaca.
 
 ## AI butuh key milikmu sendiri
@@ -166,13 +176,20 @@ Code, halaman ini boleh diabaikan.
 
 ## Menjalankan saat development
 
-Butuh Rust stable dan toolchain **MSVC** (`x86_64-pc-windows-msvc`) — MSVC
+Butuh Rust stable dengan toolchain **MSVC** (`x86_64-pc-windows-msvc`) — MSVC
 dipakai, bukan MinGW, karena binary hasilnya memakai runtime Microsoft dan jauh
 lebih jarang kena flag heuristik antivirus.
 
 ```bash
 cd native
 cargo run --release
+```
+
+Kalau toolchain default-mu bukan MSVC, tambahkan targetnya secara eksplisit:
+
+```bash
+cd native
+cargo run --release --target x86_64-pc-windows-msvc
 ```
 
 Menjalankan test:
@@ -222,7 +239,7 @@ native/                  workspace Cargo aplikasi
     application/         use case dan trait port (Clock, Network, Store, ...)
     infrastructure/      adapter nyata: SMTC, Win32, DPAPI, cuaca, AI, IPC
     presentation/        seluruh UI egui
-      pages/             satu berkas per halaman notch
+      pages/             satu berkas per halaman notch (plus seek.rs, helper seek)
       shell/             bingkai notch: pill ↔ panel, hover intent
       layout.rs style.rs theme.rs widgets.rs
   hook/src/main.rs       biner pendamping ringan untuk hook Claude Code
@@ -257,14 +274,18 @@ Detail konvensi branch, format commit, dan langkah rilis ada di
 Versi 1.0.0. Belum ada code signing, jadi SmartScreen akan memberi peringatan
 saat pertama dijalankan; periksa SHA-256 yang disertakan di paket rilis.
 
-Yang belum: **pengingat tugas belum tampil di layar.** Penjadwalan dan
-pendeteksian tugas terlewat sudah jalan di `native/core/src/reminders.rs`, tapi
-pesannya disimpan tanpa ada kode yang menggambarnya, dan tab Todo di Setelan
-masih bertulis "coming soon". Panel juga memakai ukuran tetap (500×148 px, plus
-46 px saat menu dock terbuka) yang dibuka dengan animasi pegas — isi halaman
-yang menyesuaikan diri ke ruang itu, bukan panel yang tumbuh mengikuti isi.
-Hitungan "sesi" Pomodoro dan "minum" hidrasi juga belum direset otomatis saat
-hari berganti; tombol reset-nya manual.
+Yang belum:
+
+- **Pengingat tugas belum tampil di layar.** Penjadwalan dan pendeteksian tugas
+  terlewat sudah jalan di `native/core/src/reminders.rs`, tapi pesannya disimpan
+  tanpa ada kode yang menggambarnya, dan tab Todo di Setelan masih bertulis
+  "coming soon".
+- **Halaman Hidrasi dan Now Playing belum bisa dibuka** — lihat di atas.
+- **Panel memakai ukuran tetap** (500×148 px, plus 46 px saat menu dock terbuka)
+  yang dibuka dengan animasi pegas; isi halaman yang menyesuaikan diri ke ruang
+  itu, bukan panel yang tumbuh mengikuti isi.
+- **Hitungan belum direset otomatis saat hari berganti** — "sesi" Pomodoro dan
+  "minum" hidrasi hanya bertambah, dan reset-nya manual.
 
 Rencana pengembangan dan utang teknis ada di [docs/ROADMAP.md](docs/ROADMAP.md).
 Riwayat perubahan ada di [CHANGELOG.md](CHANGELOG.md).

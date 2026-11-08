@@ -90,8 +90,8 @@ hilang di rilis berikutnya.
 
 ```bash
 git checkout main && git pull
-git tag -a v0.3.1 -m "Noktah 0.3.1 — ringkasan singkat"
-git push origin v0.3.1
+git tag -a v1.0.1 -m "Noktah 1.0.1 — ringkasan singkat"
+git push origin v1.0.1
 ```
 
 CI akan build aplikasi native dan membuat GitHub Release otomatis dengan paket
