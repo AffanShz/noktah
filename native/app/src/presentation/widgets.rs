@@ -67,7 +67,7 @@ pub fn section(ui: &mut egui::Ui, judul: &str, _theme: &Theme) {
     ui.add_space(S1);
 }
 
-/// Kontainer kartu setelan bergaya Nusa (dark rounded card).
+/// Kontainer kartu setelan modern (dark rounded card).
 pub fn card_group(ui: &mut egui::Ui, isi: impl FnOnce(&mut egui::Ui)) {
     egui::Frame::none()
         .fill(Color32::from_rgb(37, 37, 41))

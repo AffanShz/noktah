@@ -132,7 +132,7 @@ pub struct Noktah {
     pub banner: Option<(String, Instant)>,
     pub(crate) save_at: Option<Instant>,
     pub lang: Lang,
-    /// Buka jendela/screen setelan baru ala Nusa (Image 4).
+    /// Buka jendela/screen setelan baru sekunder.
     pub show_settings: bool,
     pub(crate) settings_tab: SettingsTab,
     /// 0 = dock menganggur (tiga garis), 1 = dock terbuka penuh.

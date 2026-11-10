@@ -1,4 +1,4 @@
-//! Isi jendela Setelan dengan tabbed UI ala Nusa.
+//! Isi jendela Setelan dengan tabbed UI .
 //!
 //! Setiap tab punya fokus: General (start behavior, language), Display (window chrome),
 //! Appearance (colors, glass effect), Music (lyrics, pill), Tasks (todo reminders),

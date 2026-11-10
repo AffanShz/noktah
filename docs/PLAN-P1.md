@@ -1,11 +1,11 @@
-# Rencana P1 — empat perbaikan dari analisa Nusa
+# Rencana P1 — empat perbaikan dari analisa fitur
 
 Status: **disetujui dan dikerjakan** (2026-10-26). Keputusan yang diambil:
 notch minimal 6 px dengan isi disembunyikan, pengingat berupa pita di dalam
 notch (bukan toast Windows), waktu pengingat dipilih lewat jam, dan auto-scroll
 lirik berhenti 4 detik setelah baris diklik.
 
-Diambil dari perbandingan dengan Nusa (notch Windows, v1.0.0). Empat item ini
+Empat item ini
 dipilih karena murah, tidak butuh interop Win32 baru, dan dampaknya langsung
 terasa. Halaman unduhan sengaja dikeluarkan sesuai permintaan.
 

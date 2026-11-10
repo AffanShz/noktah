@@ -117,7 +117,7 @@ pub struct ForecastHour {
     pub is_now: bool,
 }
 
-/// Mode Pomodoro ala Nusa
+/// Mode Pomodoro 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PomodoroMode {
     Focus,

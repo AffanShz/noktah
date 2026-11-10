@@ -5,7 +5,7 @@
 //! - Bentuk squircle notch dinamis yang bermetamorfosis sesuai spring
 //! - Penempatan baris minimized (`mini`)
 //! - Kontainer panel isi notch (`draw_panel`)
-//! - Viewport jendela setelan sekunder dengan tab UI ala Nusa (`draw_settings_window`)
+//! - Viewport jendela setelan sekunder dengan tab UI  (`draw_settings_window`)
 
 use crate::app::{Noktah, SettingsTab};
 use crate::infrastructure::glass;
@@ -21,7 +21,7 @@ impl Noktah {
     /// Isinya memakai ulang `tab_settings` supaya tidak ada dua daftar
     /// setelan yang bisa berbeda; yang ditambahkan di sini hanya judul,
     /// tombol tutup, dan bingkai gulir.
-    /// Jendela setelan terpisah (Viewport egui) dengan tab UI ala Nusa / Apple
+    /// Jendela setelan terpisah (Viewport egui) dengan tab UI dengan navigasi sidebar
     /// — header dengan title bar, tab switcher horizontal di atas, konten scroll di bawah.
     ///
     /// Tab design principles:
@@ -32,7 +32,7 @@ impl Noktah {
         let theme = self.theme;
         let mut close = false;
 
-        // 1. Sidebar Kiri ala Nusa: lebar 200px, warna #161619
+        // 1. Sidebar Kiri : lebar 200px, warna #161619
         egui::SidePanel::left("settings_sidebar")
             .resizable(false)
             .exact_width(200.0)

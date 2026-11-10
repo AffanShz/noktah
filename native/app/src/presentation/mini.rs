@@ -253,7 +253,7 @@ pub fn draw(painter: &Painter, rect: Rect, ctx: &MiniCtx) {
     let theme = ctx.theme;
     let cy = rect.center().y;
 
-    // Tanpa lagu: jam, daya, dan waveform ala Nusa (70_notch_minimal_pill.png)
+    // Tanpa lagu: jam, daya, dan waveform 
     if !ctx.media.active {
         draw_minimal_pill(painter, rect, ctx);
         return;
