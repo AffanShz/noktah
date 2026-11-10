@@ -33,9 +33,14 @@ fn cache_load(req: &Request) -> Option<LyricsResult> {
     let raw = std::fs::read_to_string(path).ok()?;
     let cached: Cached = serde_json::from_str(&raw).ok()?;
 
-    // Cache kedaluwarsa setelah 30 hari — lirik bisa diperbaiki di hulu.
+    // Cache kedaluwarsa: lirik tersinkron 30 hari, teks polos 1 hari (agar jika ada yang upload lirik sync di hulu segera terbarui).
     let umur = chrono::Local::now().timestamp_millis() - cached.at;
-    if umur > 30 * 24 * 3600 * 1000 {
+    let max_age_ms = if cached.synced {
+        30 * 24 * 3600 * 1000
+    } else {
+        24 * 3600 * 1000
+    };
+    if umur > max_age_ms {
         return None;
     }
 
@@ -148,27 +153,38 @@ fn fetch(req: &Request) -> Option<LyricsResult> {
         clean_title.as_str()
     };
 
-    // 1. Coba LRCLIB (Direct Get & Search)
+    let mut fallback_plain: Option<LyricsResult> = None;
+
+    // 1. Coba LRCLIB (Direct Get & Search) - prioritaskan lirik tersinkronisasi
     if let Some(res) = fetch_lrclib(&agent, req, title_to_use) {
-        return Some(res);
+        if res.synced {
+            return Some(res);
+        }
+        fallback_plain = Some(res);
     }
 
-    // 2. Fallback ke BetterLyrics API (Apple Music TTML via https://lyrics-api.boidu.dev)
-    if let Some(res) = fetch_betterlyrics(&agent, req, title_to_use) {
-        return Some(res);
-    }
-
-    // 3. Fallback ke NetEase Cloud Music (https://music.163.com)
-    if let Some(res) = fetch_netease(&agent, req, title_to_use) {
-        return Some(res);
-    }
-
-    // 4. Fallback ke KuGou Mobile API (http://mobileservice.kugou.com)
+    // 2. Fallback ke KuGou Mobile API
     if let Some(res) = fetch_kugou(&agent, req, title_to_use) {
-        return Some(res);
+        if res.synced {
+            return Some(res);
+        }
+        if fallback_plain.is_none() {
+            fallback_plain = Some(res);
+        }
     }
 
-    None
+    // 3. Fallback ke NetEase Cloud Music
+    if let Some(res) = fetch_netease(&agent, req, title_to_use) {
+        if res.synced {
+            return Some(res);
+        }
+        if fallback_plain.is_none() {
+            fallback_plain = Some(res);
+        }
+    }
+
+    // Kembalikan lirik polos jika tidak ada satu pun provider yang memiliki lirik tersinkron
+    fallback_plain
 }
 
 fn fetch_lrclib(agent: &ureq::Agent, req: &Request, clean_title: &str) -> Option<LyricsResult> {
@@ -176,19 +192,30 @@ fn fetch_lrclib(agent: &ureq::Agent, req: &Request, clean_title: &str) -> Option
     let title = urlencode(clean_title);
     let album = urlencode(&req.album);
 
-    // 1a. Paling akurat: judul bersih + artis + durasi.
+    let mut plain_fallback: Option<LyricsResult> = None;
+
+    // 1a. Coba get langsung dengan durasi (utamakan yang synced):
     if req.duration > 0 {
         let url = format!(
             "https://lrclib.net/api/get?artist_name={artist}&track_name={title}&duration={}",
             req.duration
         );
         if let Some((lines, synced)) = parse_response(agent, &url) {
-            return Some(LyricsResult {
-                track_id: req.track_id.clone(),
-                lines,
-                synced,
-                provider: "LRCLIB".into(),
-            });
+            if synced {
+                return Some(LyricsResult {
+                    track_id: req.track_id.clone(),
+                    lines,
+                    synced: true,
+                    provider: "LRCLIB".into(),
+                });
+            } else if plain_fallback.is_none() {
+                plain_fallback = Some(LyricsResult {
+                    track_id: req.track_id.clone(),
+                    lines,
+                    synced: false,
+                    provider: "LRCLIB".into(),
+                });
+            }
         }
 
         // Jika judul asli berbeda dari judul bersih, coba juga judul aslinya
@@ -199,78 +226,37 @@ fn fetch_lrclib(agent: &ureq::Agent, req: &Request, clean_title: &str) -> Option
                 req.duration
             );
             if let Some((lines, synced)) = parse_response(agent, &url_raw) {
-                return Some(LyricsResult {
-                    track_id: req.track_id.clone(),
-                    lines,
-                    synced,
-                    provider: "LRCLIB".into(),
-                });
+                if synced {
+                    return Some(LyricsResult {
+                        track_id: req.track_id.clone(),
+                        lines,
+                        synced: true,
+                        provider: "LRCLIB".into(),
+                    });
+                } else if plain_fallback.is_none() {
+                    plain_fallback = Some(LyricsResult {
+                        track_id: req.track_id.clone(),
+                        lines,
+                        synced: false,
+                        provider: "LRCLIB".into(),
+                    });
+                }
             }
         }
     }
 
     // 1b. Tanpa durasi — beberapa unggahan tidak mencantumkannya.
-    let url = format!("https://lrclib.net/api/get?artist_name={artist}&track_name={title}");
-    if let Some((lines, synced)) = parse_response(agent, &url) {
-        return Some(LyricsResult {
-            track_id: req.track_id.clone(),
-            lines,
-            synced,
-            provider: "LRCLIB".into(),
-        });
-    }
-
-    // 1c. Pencarian bebas, lalu pilih kandidat dengan skor tertinggi.
-    let url = format!(
-        "https://lrclib.net/api/search?track_name={title}&artist_name={artist}&album_name={album}"
-    );
-    let json: serde_json::Value = get_json(agent, &url)?;
-    let items = json.as_array()?;
-
-    let mut kandidat: Vec<Candidate> = Vec::new();
-    let mut teks: Vec<(Option<String>, Option<String>)> = Vec::new();
-
-    for item in items {
-        let judul = item["trackName"].as_str().unwrap_or_default().to_string();
-        let artis = item["artistName"].as_str().unwrap_or_default().to_string();
-        let durasi = item["duration"].as_f64().unwrap_or(0.0) as i64;
-        kandidat.push(Candidate {
-            title: judul,
-            artist: artis,
-            duration: durasi,
-        });
-        teks.push((
-            item["syncedLyrics"].as_str().map(str::to_string),
-            item["plainLyrics"].as_str().map(str::to_string),
-        ));
-    }
-
-    let (idx, _) = lyrics::best(&kandidat, clean_title, &req.artist, req.duration, 0.50)?;
-    let (synced_raw, plain_raw) = teks.get(idx)?.clone();
-
-    if let Some(raw) = synced_raw {
-        let lines = noktah_core::lrc::parse_lrc(&raw);
-        if !lines.is_empty() {
+    let url_no_dur = format!("https://lrclib.net/api/get?artist_name={artist}&track_name={title}");
+    if let Some((lines, synced)) = parse_response(agent, &url_no_dur) {
+        if synced {
             return Some(LyricsResult {
                 track_id: req.track_id.clone(),
                 lines,
                 synced: true,
                 provider: "LRCLIB".into(),
             });
-        }
-    }
-
-    if let Some(raw) = plain_raw {
-        let lines: Vec<noktah_core::lrc::LrcLine> = raw
-            .lines()
-            .filter(|l| !l.trim().is_empty())
-            .map(|l| noktah_core::lrc::LrcLine {
-                time: -1.0,
-                text: l.trim().to_string(),
-            })
-            .collect();
-        if !lines.is_empty() {
-            return Some(LyricsResult {
+        } else if plain_fallback.is_none() {
+            plain_fallback = Some(LyricsResult {
                 track_id: req.track_id.clone(),
                 lines,
                 synced: false,
@@ -279,7 +265,105 @@ fn fetch_lrclib(agent: &ureq::Agent, req: &Request, clean_title: &str) -> Option
         }
     }
 
-    None
+    // 1c. Pencarian kandidat: coba dengan album, tanpa album, dan query umum `q`
+    let mut search_urls = Vec::new();
+    if !req.album.is_empty() {
+        search_urls.push(format!(
+            "https://lrclib.net/api/search?track_name={title}&artist_name={artist}&album_name={album}"
+        ));
+    }
+    search_urls.push(format!(
+        "https://lrclib.net/api/search?track_name={title}&artist_name={artist}"
+    ));
+    let q_query = if req.artist.trim().is_empty() {
+        clean_title.to_string()
+    } else {
+        format!("{} {}", clean_title, req.artist)
+    };
+    search_urls.push(format!(
+        "https://lrclib.net/api/search?q={}",
+        urlencode(&q_query)
+    ));
+
+    for search_url in search_urls {
+        let Some(json) = get_json(agent, &search_url) else { continue };
+        let Some(items) = json.as_array() else { continue };
+        if items.is_empty() {
+            continue;
+        }
+
+        let mut kandidat: Vec<Candidate> = Vec::new();
+        let mut teks: Vec<(Option<String>, Option<String>)> = Vec::new();
+
+        for item in items {
+            let judul = item["trackName"].as_str().unwrap_or_default().to_string();
+            let artis = item["artistName"].as_str().unwrap_or_default().to_string();
+            let durasi = item["duration"].as_f64().unwrap_or(0.0) as i64;
+            kandidat.push(Candidate {
+                title: judul,
+                artist: artis,
+                duration: durasi,
+            });
+            teks.push((
+                item["syncedLyrics"].as_str().map(str::to_string),
+                item["plainLyrics"].as_str().map(str::to_string),
+            ));
+        }
+
+        // Prioritas tertinggi: cari kandidat yang punya synced lyrics
+        let synced_indices: Vec<usize> = teks
+            .iter()
+            .enumerate()
+            .filter_map(|(i, (synced, _))| if synced.is_some() { Some(i) } else { None })
+            .collect();
+
+        if !synced_indices.is_empty() {
+            let synced_candidates: Vec<Candidate> = synced_indices
+                .iter()
+                .map(|&i| kandidat[i].clone())
+                .collect();
+            if let Some((sub_idx, _)) = lyrics::best(&synced_candidates, clean_title, &req.artist, req.duration, 0.40) {
+                let orig_idx = synced_indices[sub_idx];
+                if let Some(raw) = &teks[orig_idx].0 {
+                    let lines = noktah_core::lrc::parse_lrc(raw);
+                    if !lines.is_empty() {
+                        return Some(LyricsResult {
+                            track_id: req.track_id.clone(),
+                            lines,
+                            synced: true,
+                            provider: "LRCLIB".into(),
+                        });
+                    }
+                }
+            }
+        }
+
+        // Simpan plain fallback jika belum ada
+        if plain_fallback.is_none() {
+            if let Some((idx, _)) = lyrics::best(&kandidat, clean_title, &req.artist, req.duration, 0.45) {
+                if let Some(raw) = &teks[idx].1 {
+                    let lines: Vec<noktah_core::lrc::LrcLine> = raw
+                        .lines()
+                        .filter(|l| !l.trim().is_empty())
+                        .map(|l| noktah_core::lrc::LrcLine {
+                            time: -1.0,
+                            text: l.trim().to_string(),
+                        })
+                        .collect();
+                    if !lines.is_empty() {
+                        plain_fallback = Some(LyricsResult {
+                            track_id: req.track_id.clone(),
+                            lines,
+                            synced: false,
+                            provider: "LRCLIB".into(),
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    plain_fallback
 }
 
 fn fetch_betterlyrics(agent: &ureq::Agent, req: &Request, clean_title: &str) -> Option<LyricsResult> {

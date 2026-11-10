@@ -92,19 +92,22 @@ pub fn parse_lrc(raw: &str) -> Vec<LrcLine> {
     out
 }
 
-/// Indeks baris aktif; `None` kalau belum masuk baris pertama.
+/// Indeks baris aktif; `None` kalau belum masuk baris pertama atau lirik polos (tanpa timestamp).
 pub fn active_line(lines: &[LrcLine], position_ms: i64) -> Option<usize> {
-    if lines.is_empty() {
+    if lines.is_empty() || lines.first().map_or(false, |l| l.time < 0.0) {
         return None;
     }
     let now = position_ms as f64 / 1000.0;
+    if now < 0.0 {
+        return None;
+    }
     let mut low = 0usize;
     let mut high = lines.len() - 1;
     let mut answer = None;
 
     while low <= high {
         let mid = (low + high) / 2;
-        if lines[mid].time <= now {
+        if lines[mid].time >= 0.0 && lines[mid].time <= now {
             answer = Some(mid);
             low = mid + 1;
         } else {
@@ -197,6 +200,17 @@ mod tests {
     #[test]
     fn baris_aktif_daftar_kosong() {
         assert_eq!(active_line(&[], 1000), None);
+    }
+
+    #[test]
+    fn baris_aktif_lirik_polos_tanpa_timestamp_menghasilkan_none() {
+        let plain = vec![
+            LrcLine { time: -1.0, text: "Di sore hari yang lucu".into() },
+            LrcLine { time: -1.0, text: "Kita".into() },
+        ];
+        assert_eq!(active_line(&plain, 0), None);
+        assert_eq!(active_line(&plain, 76_000), None);
+        assert_eq!(active_line(&plain, 276_000), None);
     }
 
     #[test]
