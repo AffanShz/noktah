@@ -32,106 +32,262 @@ impl Noktah {
         let theme = self.theme;
         let mut close = false;
 
-        // Tab bar height
-        const TAB_H: f32 = 40.0;
-        // Tab width for icon-only tabs (no labels shown for space efficiency)
-        const TAB_ITEM_W: f32 = 44.0;
-
-        egui::CentralPanel::default()
+        // 1. Sidebar Kiri ala Nusa: lebar 200px, warna #161619
+        egui::SidePanel::left("settings_sidebar")
+            .resizable(false)
+            .exact_width(200.0)
             .frame(
                 egui::Frame::none()
-                    .fill(egui::Color32::from_rgb(18, 19, 24))
-                    .inner_margin(egui::Margin::same(style::PAD)),
+                    .fill(Color32::from_rgb(22, 22, 25))
+                    .inner_margin(egui::Margin {
+                        left: 14.0,
+                        right: 14.0,
+                        top: 14.0,
+                        bottom: 14.0,
+                    }),
             )
             .show(ctx, |ui| {
-                // ---- Title bar ----
-                ui.horizontal(|ui| {
-                    ui.label(
-                        egui::RichText::new(self.tr("settings.title"))
-                            .size(style::T_TITLE)
-                            .strong()
-                            .color(egui::Color32::WHITE),
-                    );
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if widgets::chip_button(ui, self.tr("common.close"), false, &theme) {
-                            close = true;
-                        }
-                    });
-                });
-                ui.add_space(style::S2);
-
-                // ---- Tab switcher ----
-                let tab_rect = egui::Rect::from_min_size(
-                    egui::pos2(ui.cursor().min.x, ui.cursor().min.y),
-                    egui::vec2(ui.available_width(), TAB_H),
+                // Tombol close merah bulat ala macOS di pojok kiri atas
+                let (btn_rect, btn_resp) =
+                    ui.allocate_exact_size(egui::vec2(12.0, 12.0), Sense::click());
+                let circle_color = if btn_resp.hovered() {
+                    Color32::from_rgb(255, 110, 103)
+                } else {
+                    Color32::from_rgb(255, 95, 86)
+                };
+                ui.painter().circle_filled(btn_rect.center(), 6.0, circle_color);
+                ui.painter().circle_stroke(
+                    btn_rect.center(),
+                    6.0,
+                    Stroke::new(0.5, Color32::from_rgb(224, 68, 62)),
                 );
-
-                // Tab icons in order matching SettingsTab enum
-                let tabs = [
-                    (SettingsTab::General, Icon::Gear, "General"),
-                    (SettingsTab::Display, Icon::Display, "Display"),
-                    (SettingsTab::Appearance, Icon::Palette, "Appearance"),
-                    (SettingsTab::Music, Icon::MusicNote, "Music"),
-                    (SettingsTab::Todo, Icon::Todo, "Tasks"),
-                    (SettingsTab::Pomodoro, Icon::Focus, "Focus"),
-                    (SettingsTab::Ai, Icon::AI, "AI"),
-                    (SettingsTab::About, Icon::About, "About"),
-                ];
-
-                let group_w = TAB_ITEM_W * tabs.len() as f32;
-                let group_left = tab_rect.left() + (tab_rect.width() - group_w) * 0.5;
-
-                for (idx, (tab_enum, icon, _label)) in tabs.iter().enumerate() {
-                    let r = egui::Rect::from_min_size(
-                        egui::pos2(group_left + idx as f32 * TAB_ITEM_W, tab_rect.top()),
-                        egui::vec2(TAB_ITEM_W, TAB_H),
+                if btn_resp.hovered() {
+                    let center = btn_rect.center();
+                    let d = 2.4;
+                    let stroke_x = Stroke::new(1.2, Color32::from_rgb(74, 0, 2));
+                    ui.painter().line_segment(
+                        [
+                            egui::pos2(center.x - d, center.y - d),
+                            egui::pos2(center.x + d, center.y + d),
+                        ],
+                        stroke_x,
                     );
-                    let resp = ui.allocate_rect(r, Sense::click());
-                    let aktif = *tab_enum == self.settings_tab;
+                    ui.painter().line_segment(
+                        [
+                            egui::pos2(center.x - d, center.y + d),
+                            egui::pos2(center.x + d, center.y - d),
+                        ],
+                        stroke_x,
+                    );
+                }
+                if btn_resp.clicked() {
+                    close = true;
+                }
 
-                    if aktif {
+                ui.add_space(16.0);
+
+                let item_h = 36.0;
+                let item_w = ui.available_width();
+
+                // Tab About disematkan di paling bawah (pinned bottom)
+                ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
+                    let about_tab = (
+                        SettingsTab::About,
+                        Icon::About,
+                        "About",
+                        Color32::from_rgb(100, 116, 139),
+                    );
+                    let (tab_enum, icon, label, badge_bg) = about_tab;
+                    let (rect, resp) =
+                        ui.allocate_exact_size(egui::vec2(item_w, item_h), Sense::click());
+                    let is_active = self.settings_tab == tab_enum;
+
+                    if is_active {
                         ui.painter().rect_filled(
-                            r.shrink2(egui::vec2(4.0, 3.0)),
-                            Rounding::same(style::concentric(style::R_CONTROL, style::S1)),
-                            theme.accent_soft,
-                        );
-                        ui.painter().rect_stroke(
-                            r.shrink2(egui::vec2(4.0, 3.0)),
-                            Rounding::same(style::concentric(style::R_CONTROL, style::S1)),
-                            Stroke::new(1.0_f32, theme.accent),
+                            rect,
+                            Rounding::same(8.0),
+                            Color32::from_rgb(39, 39, 44),
                         );
                     } else if resp.hovered() {
                         ui.painter().rect_filled(
-                            r.shrink2(egui::vec2(4.0, 3.0)),
-                            Rounding::same(style::R_SMALL),
-                            Color32::from_white_alpha(18),
+                            rect,
+                            Rounding::same(8.0),
+                            Color32::from_white_alpha(12),
                         );
                     }
 
+                    let badge_rect = Rect::from_center_size(
+                        egui::pos2(rect.left() + 19.0, rect.center().y),
+                        egui::vec2(24.0, 24.0),
+                    );
+                    ui.painter().rect_filled(badge_rect, Rounding::same(6.0), badge_bg);
                     widgets::glyph(
                         ui.painter(),
-                        *icon,
-                        Rect::from_center_size(r.center(), egui::vec2(16.0, 16.0)),
-                        if aktif {
-                            theme.accent
-                        } else if resp.hovered() {
-                            theme.ink
-                        } else {
-                            theme.dim
-                        },
-                        1.7,
+                        icon,
+                        Rect::from_center_size(badge_rect.center(), egui::vec2(13.0, 13.0)),
+                        Color32::WHITE,
+                        1.5,
+                    );
+
+                    let text_color = if is_active {
+                        Color32::WHITE
+                    } else if resp.hovered() {
+                        Color32::from_rgb(230, 230, 235)
+                    } else {
+                        Color32::from_rgb(160, 160, 168)
+                    };
+                    ui.painter().text(
+                        egui::pos2(rect.left() + 38.0, rect.center().y),
+                        egui::Align2::LEFT_CENTER,
+                        label,
+                        egui::FontId::proportional(13.0),
+                        text_color,
                     );
 
                     if resp.clicked() {
-                        self.settings_tab = *tab_enum;
+                        self.settings_tab = tab_enum;
                     }
-                }
 
-                ui.add_space(style::S3);
-                ui.separator();
-                ui.add_space(style::S2);
+                    ui.add_space(8.0);
 
-                // ---- Tab content ----
+                    // Navigasi Tab Utama
+                    ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
+                        let main_tabs = [
+                            (
+                                SettingsTab::General,
+                                Icon::Gear,
+                                "General",
+                                Color32::from_rgb(113, 113, 122),
+                            ),
+                            (
+                                SettingsTab::Display,
+                                Icon::Display,
+                                "Display",
+                                Color32::from_rgb(37, 99, 235),
+                            ),
+                            (
+                                SettingsTab::Appearance,
+                                Icon::Palette,
+                                "Appearance",
+                                theme.accent,
+                            ),
+                            (
+                                SettingsTab::Music,
+                                Icon::MusicNote,
+                                "Music and lyrics",
+                                Color32::from_rgb(244, 63, 94),
+                            ),
+                            (
+                                SettingsTab::Todo,
+                                Icon::Todo,
+                                "To-do",
+                                Color32::from_rgb(34, 197, 94),
+                            ),
+                            (
+                                SettingsTab::Pomodoro,
+                                Icon::Focus,
+                                "Pomodoro",
+                                Color32::from_rgb(249, 115, 22),
+                            ),
+                            (
+                                SettingsTab::Ai,
+                                Icon::AI,
+                                "AI Assistant",
+                                Color32::from_rgb(168, 85, 247),
+                            ),
+                        ];
+
+                        for (tab_enum, icon, label, badge_bg) in main_tabs {
+                            let (rect, resp) =
+                                ui.allocate_exact_size(egui::vec2(item_w, item_h), Sense::click());
+                            let is_active = self.settings_tab == tab_enum;
+
+                            if is_active {
+                                ui.painter().rect_filled(
+                                    rect,
+                                    Rounding::same(8.0),
+                                    Color32::from_rgb(39, 39, 44),
+                                );
+                            } else if resp.hovered() {
+                                ui.painter().rect_filled(
+                                    rect,
+                                    Rounding::same(8.0),
+                                    Color32::from_white_alpha(12),
+                                );
+                            }
+
+                            let badge_rect = Rect::from_center_size(
+                                egui::pos2(rect.left() + 19.0, rect.center().y),
+                                egui::vec2(24.0, 24.0),
+                            );
+                            ui.painter().rect_filled(badge_rect, Rounding::same(6.0), badge_bg);
+                            widgets::glyph(
+                                ui.painter(),
+                                icon,
+                                Rect::from_center_size(badge_rect.center(), egui::vec2(13.0, 13.0)),
+                                Color32::WHITE,
+                                1.5,
+                            );
+
+                            let text_color = if is_active {
+                                Color32::WHITE
+                            } else if resp.hovered() {
+                                Color32::from_rgb(230, 230, 235)
+                            } else {
+                                Color32::from_rgb(160, 160, 168)
+                            };
+                            ui.painter().text(
+                                egui::pos2(rect.left() + 38.0, rect.center().y),
+                                egui::Align2::LEFT_CENTER,
+                                label,
+                                egui::FontId::proportional(13.0),
+                                text_color,
+                            );
+
+                            if resp.clicked() {
+                                self.settings_tab = tab_enum;
+                            }
+
+                            ui.add_space(3.0);
+                        }
+                    });
+                });
+            });
+
+        // 2. Central Panel (Konten Utama di Sebelah Kanan)
+        egui::CentralPanel::default()
+            .frame(
+                egui::Frame::none()
+                    .fill(Color32::from_rgb(28, 28, 31))
+                    .inner_margin(egui::Margin {
+                        left: 24.0,
+                        right: 24.0,
+                        top: 20.0,
+                        bottom: 16.0,
+                    }),
+            )
+            .show(ctx, |ui| {
+                // Judul Tab di bagian atas konten
+                let tab_title = match self.settings_tab {
+                    SettingsTab::General => "General",
+                    SettingsTab::Display => "Display",
+                    SettingsTab::Appearance => "Appearance",
+                    SettingsTab::Music => "Music and lyrics",
+                    SettingsTab::Todo => "To-do",
+                    SettingsTab::Pomodoro => "Pomodoro",
+                    SettingsTab::Ai => "AI Assistant",
+                    SettingsTab::About => "About",
+                };
+
+                ui.label(
+                    egui::RichText::new(tab_title)
+                        .size(22.0)
+                        .strong()
+                        .color(Color32::WHITE),
+                );
+                ui.add_space(16.0);
+
+                // Area gulir konten pengaturan
                 egui::ScrollArea::vertical()
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
@@ -152,7 +308,7 @@ impl Noktah {
     /// Dipakai untuk menyusutkan pill: slot lirik hanya ikut dihitung kalau
     /// memang ada teks yang akan mengisinya.
     pub(crate) fn has_lyrics(&self) -> bool {
-        self.settings.lyrics_enabled && !self.lyrics.is_empty()
+        self.settings.lyrics_enabled && self.is_lyrics_synced()
     }
 
     /// Dimensi target saat terbuka (selalu pulau kompak 560x160 px ala Apple Dynamic Island).
@@ -168,9 +324,13 @@ impl Noktah {
     /// Menutup panel kembali ke pill, sama seperti kursor menjauh.
     pub fn close_panel(&mut self) {
         self.hovered = false;
+        self.hover_since = None;
+        self.suppress_hover = true;
         self.show_settings = false;
         self.open.target = 0.0;
         self.open_h.target = 0.0;
+        self.open_h.set_spec(crate::presentation::spring::MORPH_CLOSE_H);
+        self.open.set_spec(crate::presentation::spring::MORPH_CLOSE_W);
     }
 
     pub(crate) fn draw_shell(&mut self, ctx: &egui::Context, outer_rect: Rect) {
@@ -242,6 +402,18 @@ impl Noktah {
                         || (self.media.active && self.media.playing && self.settings.mini_lyrics)
                     {
                         ui.ctx().request_repaint();
+                    }
+
+                    // Klik pada badge maskot saat baris minimized untuk efek squish
+                    if mini_alpha > 0.5 && ui.input(|i| i.pointer.primary_clicked()) {
+                        let badge_center = egui::pos2(outer_rect.left() + 32.0, outer_rect.center().y);
+                        let badge_rect = Rect::from_center_size(badge_center, egui::vec2(28.0, 28.0));
+                        if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
+                            if badge_rect.contains(pos) {
+                                self.mascot.trigger_squish(self.anim.elapsed().as_secs_f32());
+                                ui.ctx().request_repaint();
+                            }
+                        }
                     }
 
                     let mini_ctx = mini::MiniCtx {
