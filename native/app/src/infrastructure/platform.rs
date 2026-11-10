@@ -26,6 +26,99 @@ use windows::Win32::UI::WindowsAndMessaging::{
     SWP_NOSIZE, WS_EX_NOACTIVATE, WS_EX_TRANSPARENT,
 };
 
+/// Jeda minimum antar pemasangan ulang blur-belakang.
+///
+/// `ensure_alpha_visible` dipanggil dari jalur per-frame (`sync_region`), jadi
+/// ia harus membatasi dirinya sendiri — kalau tidak, morph 300 ms akan
+/// memanggil DWM ~18 kali. 500 ms = paling banyak 2 panggilan per detik saat
+/// diam, dan tetap menyembuhkan dalam setengah detik setelah komposisi DWM
+/// bermasalah.
+#[cfg(windows)]
+const ALPHA_CHECK_INTERVAL: std::time::Duration = std::time::Duration::from_millis(500);
+
+/// Waktu (epoch ms) pemasangan terakhir. 0 = belum pernah.
+///
+/// Aritmetika `u32` mengikuti aturan wrapping; pembandingan memakai selisih,
+/// jadi wrap-around tidak menimbulkan kesalahan.
+#[cfg(windows)]
+static LAST_ALPHA_CHECK_MS: AtomicU32 = AtomicU32::new(0);
+
+/// Memastikan jendela dikomposit DWM dengan alpha per piksel.
+///
+/// Di Windows, alpha per piksel dari surface GL **tidak** dikomposit sendiri:
+/// yang membuat jendela eframe transparan adalah `DwmEnableBlurBehindWindow`
+/// dengan region blur KOSONG, yang dipanggil winit **tepat sekali** saat window
+/// dibuat (`on_create`). winit sendiri menandai ini sebagai utang:
+///
+/// ```text
+/// // FIXME: detect WM_DWMCOMPOSITIONCHANGED and call DwmEnableBlurBehindWindow
+/// // if necessary
+/// ```
+///
+/// (`winit-0.30.13/src/platform_impl/windows/event_loop.rs`)
+///
+/// Selama efek itu tidak aktif, setiap piksel jendela yang tidak digambar —
+/// yakni **seluruh region jendela di luar bentuk notch** (margin 8 px, atau
+/// `EAR + 8 = 36 px` saat telinga menyala) — dirender **hitam opaque**,
+/// sehingga notch terlihat seperti balok hitam seukuran region jendela.
+///
+/// Terbukti dari pengukuran langsung: mematikan blur-belakang pada jendela
+/// yang hidup mengubah area itu dari tembus-pandang menjadi `rgb(0,0,0)`;
+/// menyalakannya kembali langsung memulihkannya. Balok pada keluhan pengguna
+/// berukuran 252×74 px — persis pill `180×38` ditambah margin `36 px`.
+///
+/// Karena kondisi DWM bisa berubah kapan saja (mode tampilan, keluar dari
+/// aplikasi fullscreen, sesi RDP), efek ini dipasang ulang sebagai penyembuh
+/// diri dengan jeda minimum `ALPHA_CHECK_INTERVAL`.
+#[cfg(windows)]
+pub fn ensure_alpha_visible(hwnd: HWND) {
+    use windows::Win32::Graphics::Dwm::{DwmEnableBlurBehindWindow, DWM_BLURBEHIND};
+    use windows::Win32::Graphics::Dwm::{DWM_BB_BLURREGION, DWM_BB_ENABLE};
+    use windows::Win32::Graphics::Gdi::{CreateRectRgn, DeleteObject};
+
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u32)
+        .unwrap_or(0);
+    let terakhir = LAST_ALPHA_CHECK_MS.load(Ordering::Relaxed);
+    // Sebelumnya pernah dipasang, dan belum lewat jeda -> tidak perlu apa-apa.
+    // (`terakhir != 0` supaya pemasangan pertama selalu jalan.)
+    if terakhir != 0 && now_ms.wrapping_sub(terakhir) < ALPHA_CHECK_INTERVAL.as_millis() as u32 {
+        return;
+    }
+    LAST_ALPHA_CHECK_MS.store(now_ms, Ordering::Relaxed);
+
+    unsafe {
+        // Region blur kosong (0,0,-1,-1) = tidak ada area yang diblur: alpha
+        // jendela diserahkan sepenuhnya ke DWM, tanpa efek kaca sistem.
+        let region = CreateRectRgn(0, 0, -1, -1);
+        let bb = DWM_BLURBEHIND {
+            dwFlags: DWM_BB_ENABLE | DWM_BB_BLURREGION,
+            fEnable: true.into(),
+            hRgnBlur: region,
+            fTransitionOnMaximized: false.into(),
+        };
+        let _ = DwmEnableBlurBehindWindow(hwnd, &bb);
+        if !region.is_invalid() {
+            DeleteObject(region);
+        }
+    }
+}
+
+/// Paksa pasang ulang tanpa menunggu jeda — dipakai saat jendela baru ditemukan
+/// dan tepat setelah transisi bentuk (expand/compact) mendarat.
+#[cfg(windows)]
+pub fn force_alpha_visible(hwnd: HWND) {
+    LAST_ALPHA_CHECK_MS.store(0, Ordering::Relaxed);
+    ensure_alpha_visible(hwnd);
+}
+
+#[cfg(not(windows))]
+pub fn ensure_alpha_visible(_hwnd: usize) {}
+
+#[cfg(not(windows))]
+pub fn force_alpha_visible(_hwnd: usize) {}
+
 pub struct Hover {
     pub pos: Mutex<(f32, f32)>,
     pub expanded: AtomicBool,
@@ -135,6 +228,24 @@ mod tests {
         hover.dock_open.store(1.0f32.to_bits(), Ordering::Relaxed);
         assert_eq!(hover.shape().height(), layout::OUTER_OPEN_H);
     }
+
+    /// Margin region jendela saat telinga cair menyala.
+    ///
+    /// Angka ini adalah kunci bug "kotak hitam": region jendela = bentuk notch
+    /// + margin. Bila transparansi DWM mati, seluruh region itu dirender hitam
+    /// opaque. Untuk pill 180×38 dengan telinga menyala, region = 180+2·36 ×
+    /// 38+2·36 = 252×110 px — dan itulah ukuran balok hitam yang dilaporkan
+    /// (terpotong tepi layar atas menjadi tinggi 74 px).
+    ///
+    /// Test ini menjaga agar margin tidak diam-diam membengkak; margin besar
+    /// memperluas area yang bisa tampil sebagai balok hitam DAN menelan klik
+    /// aplikasi lain di sekitarnya.
+    #[test]
+    fn margin_region_dengan_telinga_menghasilkan_ukuran_balok_yang_dikenal() {
+        assert_eq!(layout::EAR + 8.0, 36.0, "margin telinga berubah — periksa bug kotak hitam");
+        // Tanpa telinga: margin kecil saja.
+        assert_eq!(8.0_f32, 8.0);
+    }
 }
 
 /// Tebakan awal posisi; angka pastinya ditentukan `center_window`.
@@ -236,6 +347,11 @@ pub fn sync_region(hover: &Hover, shape: egui::Rect, scale: f32) {
         Err(_) => return,
     };
 
+    // Jendela dijamin dikomposit ber-alpha setiap kali region disinkronkan —
+    // inilah titik paling andal karena berjalan di thread UI tepat saat
+    // menggambar, dengan HWND yang pasti masih hidup. Dijeda internal.
+    ensure_alpha_visible(hwnd);
+
     let telinga = hover.ears.load(Ordering::Relaxed);
     let margin = if telinga { layout::EAR + 8.0 } else { 8.0 };
 
@@ -319,6 +435,7 @@ pub fn spawn_watcher(ctx: Context, minimal: bool) -> Arc<Hover> {
             .stack_size(256 * 1024)
             .spawn(move || {
                 let mut last_near = false;
+                let mut last_cursor_pos: Option<(f32, f32)> = None;
                 let mut hwnd: Option<HWND> = None;
             let mut last_width: Option<i32> = None;
 
@@ -350,7 +467,11 @@ pub fn spawn_watcher(ctx: Context, minimal: bool) -> Arc<Hover> {
                             if let Ok(mut slot) = hover_thread.hwnd.lock() {
                                 *slot = Some(h.0 as isize);
                             }
+                            // Sejak detik pertama jendela ditemukan, pastikan
+                            // DWM mengomposit alpha per pikselnya (paksa, tanpa
+                            // menunggu jeda).
                             unsafe {
+                                force_alpha_visible(h);
                                 let style = GetWindowLongPtrW(h, GWL_EXSTYLE);
                                 SetWindowLongPtrW(
                                     h,
@@ -365,6 +486,11 @@ pub fn spawn_watcher(ctx: Context, minimal: bool) -> Arc<Hover> {
                     }
                 }
                 let Some(h) = hwnd else { continue };
+
+                // Penyembuh diri: pastikan DWM masih mengomposit alpha per
+                // piksel. Dijeda internal (500 ms), jadi aman dipanggil tiap
+                // putaran walau pemantau berjalan 16 ms saat morph.
+                unsafe { ensure_alpha_visible(h) };
 
                 let mut point = POINT::default();
                 if unsafe { GetCursorPos(&mut point) }.is_err() {
@@ -421,10 +547,17 @@ pub fn spawn_watcher(ctx: Context, minimal: bool) -> Arc<Hover> {
                 // sini: keduanya dipasang thread UI lewat `sync_region` dan
                 // `set_click_through`, tepat setelah spring di-step.
 
-                // Repaint hanya kalau kursor dekat notch atau status berubah.
+                let cursor_moved = if let Some((lx, ly)) = last_cursor_pos {
+                    (local_x - lx).hypot(local_y - ly) > 2.0
+                } else {
+                    true
+                };
+                last_cursor_pos = Some((local_x, local_y));
+
+                // Repaint jika kursor dekat notch, status berubah, atau kursor bergerak untuk gaze tracking
                 let zone = if expanded { shape } else { shape.expand(24.0) };
                 let near = zone.contains(cursor);
-                if near || near != last_near {
+                if near || near != last_near || cursor_moved {
                     ctx.request_repaint();
                 }
                 last_near = near;

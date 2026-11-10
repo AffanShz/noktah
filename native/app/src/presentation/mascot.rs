@@ -69,6 +69,11 @@ pub struct MascotState {
     pub particles: Vec<MascotParticle>,
     pub was_active: bool,
     pub last_status_tag: &'static str,
+    pub is_happy: bool,
+    pub is_surprised: bool,
+    pub is_sleeping: bool,
+    pub last_cursor: Option<Pos2>,
+    pub last_move_sec: f32,
 }
 
 impl Default for MascotState {
@@ -96,6 +101,11 @@ impl MascotState {
             particles: Vec::new(),
             was_active: false,
             last_status_tag: "idle",
+            is_happy: false,
+            is_surprised: false,
+            is_sleeping: false,
+            last_cursor: None,
+            last_move_sec: 0.0,
         }
     }
 
@@ -136,44 +146,62 @@ impl MascotState {
             self.dizzy_timer = (self.dizzy_timer - dt_clamped).max(0.0);
         }
 
+        // Deteksi gerakan dan posisi kursor
+        if let Some(cursor) = cursor_pos {
+            if let Some(last_pos) = self.last_cursor {
+                let moved_dist = (cursor - last_pos).length();
+                if moved_dist > 1.5 {
+                    self.last_move_sec = t;
+                    self.is_sleeping = false;
+                    let speed = moved_dist / dt_clamped;
+                    if speed > 1500.0 {
+                        self.is_surprised = true;
+                    } else if speed < 500.0 {
+                        self.is_surprised = false;
+                    }
+                }
+            } else {
+                self.last_move_sec = t;
+            }
+            self.last_cursor = Some(cursor);
+
+            let dx = cursor.x - mascot_center.x;
+            let dy = cursor.y - mascot_center.y;
+            let dist = (dx * dx + dy * dy).sqrt();
+
+            // Hover dekat maskot (< 42 px): ekspresi tersenyum ceria (^ ^)
+            self.is_happy = dist < 42.0;
+
+            // Inaktivitas kursor > 45 detik: tidur tenang (- -)
+            if t - self.last_move_sec > 45.0 {
+                self.is_sleeping = true;
+                self.is_happy = false;
+                self.is_surprised = false;
+            }
+        }
+
         // 3. Tentukan Target Gaze & Mood berdasarkan Status Agent
         let (target_yaw, target_pitch) = if self.dizzy_timer > 0.0 {
             ((t * 14.0).sin() * 0.85, (t * 8.0).cos() * 0.4)
-        } else if !active {
+        } else if self.is_sleeping {
             // Sleeping / Deep Idle
-            (0.0, 0.45)
+            (0.0, 0.35)
+        } else if let Some(cursor) = cursor_pos {
+            // SEMUA MASCOT IKUTI KURSOR:
+            // Baik saat idle, prompt, tool berjalan, awaiting approval, maupun selesai!
+            let dx = cursor.x - mascot_center.x;
+            let dy = cursor.y - mascot_center.y;
+            let dist = (dx * dx + dy * dy).sqrt().max(10.0);
+            let yaw = (dx / dist).clamp(-0.85, 0.85);
+            let pitch = (dy / dist).clamp(-0.75, 0.75);
+            (yaw, pitch)
         } else {
             match status {
-                AgentStatus::PromptSubmitted { .. } => {
-                    // Berpikir: melirik ke kanan-atas
-                    (0.55, -0.45)
-                }
-                AgentStatus::ToolRunning { .. } => {
-                    // Tool sedang berjalan: melirik tekun ke bawah dengan sedikit sweeping
-                    ((t * 3.5).sin() * 0.35, 0.40)
-                }
-                AgentStatus::AwaitingApproval(_) => {
-                    // Menunggu izin: menatap lurus ke user memohon
-                    (0.0, -0.15)
-                }
-                AgentStatus::Completed { .. } => {
-                    // Selesai: pandangan ceria sedikit ke atas
-                    (0.0, -0.30)
-                }
-                _ => {
-                    // Idle aktif: ikuti posisi kursor jika ada
-                    if let Some(cursor) = cursor_pos {
-                        let dx = cursor.x - mascot_center.x;
-                        let dy = cursor.y - mascot_center.y;
-                        let dist = (dx * dx + dy * dy).sqrt().max(10.0);
-                        let yaw = (dx / dist).clamp(-0.85, 0.85);
-                        let pitch = (dy / dist).clamp(-0.75, 0.75);
-                        (yaw, pitch)
-                    } else {
-                        // Pergeseran tatapan alami perlahan
-                        ((t * 0.6).sin() * 0.25, (t * 0.4).cos() * 0.15)
-                    }
-                }
+                AgentStatus::PromptSubmitted { .. } => (0.55, -0.45),
+                AgentStatus::ToolRunning { .. } => (((t * 3.5).sin() * 0.35), 0.40),
+                AgentStatus::AwaitingApproval(_) => (0.0, -0.15),
+                AgentStatus::Completed { .. } => (0.0, -0.30),
+                _ => (((t * 0.6).sin() * 0.25), ((t * 0.4).cos() * 0.15)),
             }
         };
 
@@ -186,8 +214,8 @@ impl MascotState {
         self.current_pitch += (self.eye_pitch - self.current_pitch) * (dt_clamped * gaze_speed).min(1.0);
 
         // 4. Siklus Kedipan Alami
-        if self.dizzy_timer > 0.0 || !active {
-            self.blink = if !active { 0.05 } else { 0.9 };
+        if self.dizzy_timer > 0.0 || !active || self.is_sleeping {
+            self.blink = if !active || self.is_sleeping { 0.05 } else { 0.9 };
         } else {
             self.blink_timer += dt_clamped;
             if self.blink_timer >= self.next_blink_sec {
@@ -309,6 +337,24 @@ impl MascotState {
                             Color32::from_rgb(71, 85, 105),
                             EyeStyle::Closed,
                         )
+                    } else if self.is_sleeping {
+                        (
+                            Color32::from_rgb(148, 163, 184), // Slate tidur lembut
+                            Color32::from_rgb(100, 116, 139),
+                            EyeStyle::Closed,
+                        )
+                    } else if self.is_happy {
+                        (
+                            Color32::from_rgb(241, 245, 249),
+                            Color32::from_rgb(203, 213, 225),
+                            EyeStyle::Happy,
+                        )
+                    } else if self.is_surprised {
+                        (
+                            Color32::from_rgb(241, 245, 249),
+                            Color32::from_rgb(203, 213, 225),
+                            EyeStyle::Wide,
+                        )
                     } else {
                         (
                             Color32::from_rgb(241, 245, 249), // Putih susu lembut saat idle
@@ -340,6 +386,36 @@ impl MascotRenderer {
         let rx = rect.width() * 0.45;
         let ry = rect.height() * 0.45;
 
+        // Cek kedekatan kursor ke maskot ini secara independen
+        let is_near = if let Some(cursor) = state.last_cursor {
+            (cursor - center).length() < 36.0
+        } else {
+            false
+        };
+        let effective_eye_style = if state.dizzy_timer > 0.0 {
+            EyeStyle::Dizzy
+        } else if state.is_sleeping {
+            EyeStyle::Closed
+        } else if is_near {
+            EyeStyle::Happy
+        } else {
+            eye_style
+        };
+
+        // Gaze tracking independen terhadap pusat mini mascot ini
+        let (mini_yaw, mini_pitch) = if state.dizzy_timer > 0.0 {
+            ((t * 14.0).sin() * 0.85, (t * 8.0).cos() * 0.4)
+        } else if state.is_sleeping {
+            (0.0, 0.35)
+        } else if let Some(cursor) = state.last_cursor {
+            let dx = cursor.x - center.x;
+            let dy = cursor.y - center.y;
+            let dist = (dx * dx + dy * dy).sqrt().max(10.0);
+            ((dx / dist).clamp(-0.85, 0.85), (dy / dist).clamp(-0.75, 0.75))
+        } else {
+            (state.current_yaw, state.current_pitch)
+        };
+
         // Superellipse tubuh mini (32 titik untuk efisiensi)
         let points = Self::superellipse_points(center, rx, ry, 32, 0.0);
         painter.add(egui::Shape::convex_polygon(
@@ -348,16 +424,23 @@ impl MascotRenderer {
             Stroke::new(1.0, Color32::from_white_alpha(45)),
         ));
 
+        // Pipi merona ceria saat tersenyum senang
+        if effective_eye_style == EyeStyle::Happy {
+            let blush_col = Color32::from_rgba_unmultiplied(251, 113, 133, 160);
+            painter.circle_filled(center + Vec2::new(-rx * 0.52, ry * 0.22), 1.6, blush_col);
+            painter.circle_filled(center + Vec2::new(rx * 0.52, ry * 0.22), 1.6, blush_col);
+        }
+
         // Mata 3D kompak
         Self::draw_eyes(
             painter,
             center,
             rx,
             ry,
-            state.current_yaw,
-            state.current_pitch,
+            mini_yaw,
+            mini_pitch,
             state.blink,
-            eye_style,
+            effective_eye_style,
             true,
         );
 
@@ -431,8 +514,38 @@ impl MascotRenderer {
             Color32::from_white_alpha(35),
         );
 
+        // Cek kedekatan kursor ke maskot kartu ini secara independen
+        let is_near = if let Some(cursor) = state.last_cursor {
+            (cursor - center).length() < 48.0
+        } else {
+            false
+        };
+        let effective_eye_style = if state.dizzy_timer > 0.0 {
+            EyeStyle::Dizzy
+        } else if state.is_sleeping {
+            EyeStyle::Closed
+        } else if is_near {
+            EyeStyle::Happy
+        } else {
+            eye_style
+        };
+
+        // Gaze tracking independen terhadap pusat card mascot ini
+        let (card_yaw, card_pitch) = if state.dizzy_timer > 0.0 {
+            ((t * 14.0).sin() * 0.85, (t * 8.0).cos() * 0.4)
+        } else if state.is_sleeping {
+            (0.0, 0.35)
+        } else if let Some(cursor) = state.last_cursor {
+            let dx = cursor.x - center.x;
+            let dy = cursor.y - center.y;
+            let dist = (dx * dx + dy * dy).sqrt().max(10.0);
+            ((dx / dist).clamp(-0.85, 0.85), (dy / dist).clamp(-0.75, 0.75))
+        } else {
+            (state.current_yaw, state.current_pitch)
+        };
+
         // 4. Pipi Merona Merah Muda (Cheek Blush)
-        let blush_alpha = match eye_style {
+        let blush_alpha = match effective_eye_style {
             EyeStyle::Happy => 190,
             EyeStyle::Wide => 160,
             EyeStyle::Closed => 60,
@@ -460,15 +573,15 @@ impl MascotRenderer {
             center,
             rx,
             ry,
-            state.current_yaw,
-            state.current_pitch,
+            card_yaw,
+            card_pitch,
             state.blink,
-            eye_style,
+            effective_eye_style,
             false,
         );
 
         // 6. Mulut Ekspresif
-        Self::draw_mouth(painter, center, rx, ry, eye_style, status);
+        Self::draw_mouth(painter, center, rx, ry, effective_eye_style, status);
 
         // 7. Gambar Partikel Melayang
         for p in &state.particles {
@@ -556,7 +669,7 @@ impl MascotRenderer {
 
             // Proyeksi koordinat 3D bola ke bidang 2D
             let ex = center.x + eye_yaw.sin() * eye_pitch.cos() * rx * 0.78;
-            let ey = center.y - eye_pitch.sin() * ry * 0.78;
+            let ey = center.y + eye_pitch.sin() * ry * 0.78;
 
             // Foreshortening horizontal & vertikal
             let scale_h = eye_yaw.cos().max(0.20);
@@ -618,18 +731,21 @@ impl MascotRenderer {
                 }
                 _ => {
                     // Pill standar & Thinking
-                    let base_w = if is_mini { 2.6 } else { 6.2 };
-                    let base_h = if is_mini { 3.8 } else { 9.0 };
+                    let base_w = if is_mini { 3.0 } else { 6.2 };
+                    let base_h = if is_mini { 4.4 } else { 9.0 };
                     let ew = base_w * scale_h;
                     let eh = (base_h * scale_v * blink).max(ew * 0.35);
                     let eye_rect = Rect::from_center_size(Pos2::new(ex, ey), Vec2::new(ew, eh));
                     painter.rect_filled(eye_rect, Rounding::same(ew * 0.5), eye_color);
 
-                    if !is_mini && blink > 0.4 && eh > 5.0 {
+                    if blink > 0.4 && eh > 3.0 {
+                        let spark_r = if is_mini { 0.75 } else { 1.4 };
                         let spark1 = Pos2::new(ex + ew * 0.18, ey - eh * 0.22);
-                        painter.circle_filled(spark1, 1.4, Color32::WHITE);
-                        let spark2 = Pos2::new(ex - ew * 0.16, ey + eh * 0.20);
-                        painter.circle_filled(spark2, 0.75, Color32::from_white_alpha(190));
+                        painter.circle_filled(spark1, spark_r, Color32::WHITE);
+                        if !is_mini && eh > 5.0 {
+                            let spark2 = Pos2::new(ex - ew * 0.16, ey + eh * 0.20);
+                            painter.circle_filled(spark2, 0.75, Color32::from_white_alpha(190));
+                        }
                     }
                 }
             }
@@ -740,5 +856,48 @@ mod tests {
         state.trigger_squish(1.4);
         assert_eq!(state.click_count, 0);
         assert!(state.dizzy_timer > 3.0);
+    }
+
+    #[test]
+    fn test_mascot_tracks_cursor_in_all_states() {
+        let mut state = MascotState::new();
+        let center = Pos2::new(100.0, 100.0);
+
+        // Kursor di kanan bawah
+        let cursor_rb = Some(Pos2::new(200.0, 200.0));
+
+        let req = noktah_core::model::PermissionRequest {
+            request_id: "test-req".into(),
+            tool_name: "Bash".into(),
+            tool_input: serde_json::json!({}),
+            suggestions: Vec::new(),
+        };
+
+        let statuses = vec![
+            AgentStatus::Idle,
+            AgentStatus::AwaitingApproval(req),
+            AgentStatus::ToolRunning {
+                tool: "cargo".into(),
+                input: serde_json::json!({}),
+                start_time: 0,
+            },
+            AgentStatus::PromptSubmitted {
+                prompt: "thinking".into(),
+                timestamp: 0,
+            },
+            AgentStatus::Completed {
+                summary: "done".into(),
+                last_message: "ok".into(),
+                timestamp: 0,
+            },
+        ];
+
+        for s in statuses {
+            state.update(0.016, 1.0, cursor_rb, center, &s, true);
+            // Kursor di kanan (dx > 0) -> target yaw harus positif
+            assert!(state.eye_yaw > 0.5, "eye_yaw should be positive for {:?}", s);
+            // Kursor di bawah (dy > 0) -> target pitch harus positif
+            assert!(state.eye_pitch > 0.5, "eye_pitch should be positive for {:?}", s);
+        }
     }
 }
