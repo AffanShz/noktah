@@ -43,3 +43,6 @@ secret.bin
 *.sw?
 Thumbs.db
 desktop.ini
+
+# Instruksi agen AI lokal
+AGENTS.md
