@@ -28,6 +28,7 @@ impl Noktah {
                     prompt: "Approved by user via Alt+Y".into(),
                     timestamp: now_ms,
                 };
+                self.close_panel();
             }
         } else if is_alt && key_n {
             if let Some((_, responder)) = self.pending_permission.take() {
@@ -37,6 +38,7 @@ impl Noktah {
                     updated_input: None,
                 });
                 self.agent.status = AgentStatus::Idle;
+                self.close_panel();
             }
         }
 
@@ -268,6 +270,7 @@ impl Noktah {
                         prompt: "Allowed by user".into(),
                         timestamp: now_ms,
                     };
+                    self.close_panel();
                 }
             } else if always_clicked {
                 if let Some((_, responder)) = self.pending_permission.take() {
@@ -280,6 +283,7 @@ impl Noktah {
                         prompt: "Always allowed by user".into(),
                         timestamp: now_ms,
                     };
+                    self.close_panel();
                 }
             } else if deny_clicked {
                 if let Some((_, responder)) = self.pending_permission.take() {
@@ -289,6 +293,7 @@ impl Noktah {
                         updated_input: None,
                     });
                     self.agent.status = AgentStatus::Idle;
+                    self.close_panel();
                 }
             }
 
