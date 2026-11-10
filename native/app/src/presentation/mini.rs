@@ -178,66 +178,37 @@ fn draw_minimal_pill(painter: &Painter, rect: Rect, ctx: &MiniCtx) {
     let theme = ctx.theme;
     let cy = rect.center().y;
 
-    let (badge_icon, badge_color, center_label) = if ctx.agent.active {
+    let center_label = if ctx.agent.active {
         match &ctx.agent.status {
-            noktah_core::model::AgentStatus::AwaitingApproval(_) => (
-                Icon::Bolt,
-                Color32::from_rgb(245, 158, 11),
-                "Izin [Alt+Y / Alt+N]".to_string(),
-            ),
-            noktah_core::model::AgentStatus::ToolRunning { tool, .. } => (
-                Icon::Bolt,
-                Color32::from_rgb(16, 185, 129),
-                format!("Claude: {}...", tool),
-            ),
-            noktah_core::model::AgentStatus::PromptSubmitted { .. } => (
-                Icon::Activity,
-                Color32::from_rgb(139, 92, 246),
-                "Claude Berpikir...".to_string(),
-            ),
-            _ => (
-                Icon::Bolt,
-                Color32::from_white_alpha(235),
-                ctx.clock.clone(),
-            ),
+            noktah_core::model::AgentStatus::AwaitingApproval(_) => {
+                "Izin [Alt+Y / Alt+N]".to_string()
+            }
+            noktah_core::model::AgentStatus::ToolRunning { tool, .. } => {
+                format!("Claude: {}...", tool)
+            }
+            noktah_core::model::AgentStatus::PromptSubmitted { .. } => {
+                "Claude Berpikir...".to_string()
+            }
+            _ => ctx.clock.clone(),
         }
     } else {
-        (
-            Icon::Music,
-            Color32::from_white_alpha(235),
-            ctx.clock.clone(),
-        )
+        ctx.clock.clone()
     };
 
-    // 1. Lencana kecil di kiri (`.art.sm` 24×24, radius 8) - Avatar Mascot saat agent aktif
+    // 1. Lencana kecil di kiri (`.art.sm` 24×24, radius 8) - Maskot 2 mata interaktif Noki
     let badge_d = 24.0;
     let badge = Rect::from_center_size(
         egui::pos2(rect.left() + 20.0 + badge_d / 2.0, cy),
         egui::vec2(badge_d, badge_d),
     );
-    if ctx.agent.active && ctx.settings.mini_agent {
-        crate::presentation::mascot::MascotRenderer::draw_mini(
-            painter,
-            badge,
-            ctx.mascot,
-            &ctx.agent.status,
-            true,
-            ctx.t,
-        );
-    } else {
-        painter.rect_filled(
-            badge,
-            egui::Rounding::same(8.0),
-            Color32::from_white_alpha(28),
-        );
-        crate::presentation::widgets::glyph(
-            painter,
-            badge_icon,
-            Rect::from_center_size(badge.center(), egui::vec2(12.0, 12.0)),
-            badge_color,
-            1.5,
-        );
-    }
+    crate::presentation::mascot::MascotRenderer::draw_mini(
+        painter,
+        badge,
+        ctx.mascot,
+        &ctx.agent.status,
+        true,
+        ctx.t,
+    );
 
     // 2. Equalizer di kanan (`.eq`): 4 batang, jarak 2 px.
     let n_bars = 4;
@@ -483,13 +454,35 @@ pub fn draw(painter: &Painter, rect: Rect, ctx: &MiniCtx) {
         x += 175.0;
     }
 
-    // 3. Slot lirik selebar 240 px, terpusat di pill. Pembatas lama antara
-    //    judul dan lirik dihapus.
-    let slot_w = 240.0;
-    let slot_x = rect.center().x - 120.0;
-    let slot_clip = Rect::from_center_size(
-        egui::pos2(slot_x + slot_w * 0.5, cy),
-        egui::vec2(slot_w, LYR_HALF_H * 2.0),
+    // 3. Slot lirik dinamis: ruang bebas antara item kiri (sampul/judul)
+    //    dan item kanan (kontrol, equalizer, mascot, jam, cpu, ram).
+    //    Mencegah teks lirik menabrak maskot atau kontrol pada rasio apa pun.
+    let mut right_items_w = 0.0;
+    if ctx.settings.mini_controls { right_items_w += 64.0 + 6.0; }
+    if ctx.settings.mini_wave { right_items_w += 38.0 + 6.0; }
+    if ctx.agent.active && ctx.settings.mini_agent { right_items_w += 34.0 + 6.0; }
+    if ctx.settings.mini_clock { right_items_w += 64.0 + 6.0; }
+    if ctx.settings.mini_cpu { right_items_w += 54.0 + 6.0; }
+    if ctx.settings.mini_ram { right_items_w += 54.0 + 6.0; }
+
+    let slot_left = if x > rect.left() + PAD {
+        x + 8.0
+    } else {
+        rect.left() + PAD
+    };
+
+    let right_boundary = if right_items_w > 0.0 {
+        rect.right() - PAD - right_items_w + 6.0
+    } else {
+        rect.right() - PAD
+    };
+    let slot_right = (right_boundary - 8.0).max(slot_left + 20.0);
+
+    let slot_w = (slot_right - slot_left).max(20.0);
+    let slot_x = slot_left;
+    let slot_clip = Rect::from_min_max(
+        egui::pos2(slot_left, cy - LYR_HALF_H),
+        egui::pos2(slot_right, cy + LYR_HALF_H),
     )
     .intersect(painter.clip_rect());
 
@@ -963,6 +956,28 @@ mod tests {
     use eframe::egui::{pos2, vec2};
 
     #[test]
+    fn slot_lirik_dinamis_tidak_pernah_menabrak_komponen_kanan_maupun_kiri() {
+        let rect = Rect::from_min_size(pos2(100.0, 10.0), vec2(400.0, 38.0));
+        let pad = PAD;
+        // Simulasi item kiri OFF, tetapi maskot dan kontrol ON di kanan
+        let x_kiri = rect.left() + pad; // tidak ada art / judul
+        let mut right_w = 0.0;
+        let mini_agent = true; // maskot ON
+        if mini_agent { right_w += 34.0 + 6.0; }
+        let mini_controls = true; // kontrol ON
+        if mini_controls { right_w += 64.0 + 6.0; }
+
+        let slot_left = x_kiri;
+        let right_boundary = rect.right() - pad - right_w + 6.0;
+        let slot_right = (right_boundary - 8.0).max(slot_left + 20.0);
+        let slot_w = (slot_right - slot_left).max(20.0);
+
+        assert!(slot_left >= rect.left() + pad);
+        assert!(slot_right <= right_boundary - 8.0);
+        assert!(slot_left + slot_w <= right_boundary);
+    }
+
+    #[test]
     fn progress_kosong_ketika_pill_lebih_sempit_dari_dua_inset() {
         // Pill selebar <= 2*inset + 2 px tidak menyisakan ruang untuk jalur;
         // fungsi harus mengembalikan None supaya progress_aura tidak menggambar
@@ -1167,13 +1182,15 @@ fn comet_trail(
         mesh.colored_vertex(egui::pos2(x, jalur.bottom()), c);
 
         if i > 0 {
-            let prev = (mesh.vertices.len() - 2) as u32;
-            let cur = prev + 2;
+            let cur = (mesh.vertices.len() - 2) as u32;
+            let prev = cur - 2;
             mesh.add_triangle(prev, prev + 1, cur);
             mesh.add_triangle(prev + 1, cur + 1, cur);
         }
     }
-    painter.add(egui::Shape::mesh(mesh));
+    if mesh.is_valid() {
+        painter.add(egui::Shape::mesh(mesh));
+    }
 }
 
 /// Halo elips di ujung progres — titik terang yang membuat garis terbaca
