@@ -169,8 +169,40 @@ fn ellipsize(painter: &Painter, line: &str, font: &FontId, color: Color32, max_w
     ok.or_else(|| Some(first_plus))
 }
 
+/// Pembersih nama tool Claude Code: menghapus prefix MCP berbelit
+/// (misal `mcp__terminal__read_terminal` menjadi `read_terminal`).
+pub(crate) fn clean_tool_name(tool: &str) -> &str {
+    if let Some(stripped) = tool.strip_prefix("mcp__") {
+        stripped.split("__").last().unwrap_or(stripped)
+    } else if let Some(stripped) = tool.strip_prefix("mcp:") {
+        stripped.split(':').last().unwrap_or(stripped)
+    } else {
+        tool
+    }
+}
+
+/// Format label status agent atau jam untuk pill minimal.
+pub(crate) fn format_agent_status_label(
+    status: &noktah_core::model::AgentStatus,
+    clock: &str,
+) -> String {
+    match status {
+        noktah_core::model::AgentStatus::AwaitingApproval(_) => {
+            "Izin [Alt+Y / Alt+N]".to_string()
+        }
+        noktah_core::model::AgentStatus::ToolRunning { tool, .. } => {
+            let clean = clean_tool_name(tool);
+            format!("Claude: {clean}")
+        }
+        noktah_core::model::AgentStatus::PromptSubmitted { .. } => {
+            "Claude Berpikir...".to_string()
+        }
+        _ => clock.to_string(),
+    }
+}
+
 /// Menggambar baris minimal saat tidak memutar musik:
-/// [ikon ♪/agent] + [jam/status] + [equalizer], mengikuti `.compact` di prototipe.
+/// [ikon ▶/agent] + [jam/status] + [equalizer], mengikuti `.compact` di prototipe.
 ///
 /// Prototipe selalu menampilkan lencana sampul kecil di kiri dan equalizer di
 /// kanan; jam mengisi sisa ruang di tengah.
@@ -179,18 +211,7 @@ fn draw_minimal_pill(painter: &Painter, rect: Rect, ctx: &MiniCtx) {
     let cy = rect.center().y;
 
     let center_label = if ctx.agent.active {
-        match &ctx.agent.status {
-            noktah_core::model::AgentStatus::AwaitingApproval(_) => {
-                "Izin [Alt+Y / Alt+N]".to_string()
-            }
-            noktah_core::model::AgentStatus::ToolRunning { tool, .. } => {
-                format!("Claude: {}...", tool)
-            }
-            noktah_core::model::AgentStatus::PromptSubmitted { .. } => {
-                "Claude Berpikir...".to_string()
-            }
-            _ => ctx.clock.clone(),
-        }
+        format_agent_status_label(&ctx.agent.status, &ctx.clock)
     } else {
         ctx.clock.clone()
     };
@@ -231,17 +252,27 @@ fn draw_minimal_pill(painter: &Painter, rect: Rect, ctx: &MiniCtx) {
     }
 
     // 3. Jam / Status Claude mengisi ruang antara lencana dan equalizer.
+    // Dibatasi ketat dengan padding aman agar tidak menabrak badge (kiri) maupun equalizer (kanan).
+    let label_left = badge.right() + 8.0;
+    let label_right = eq_left - 8.0;
     let label_rect = Rect::from_min_max(
-        egui::pos2(badge.right() + 8.0, rect.top()),
-        egui::pos2(eq_left - 8.0, rect.bottom()),
+        egui::pos2(label_left, rect.top()),
+        egui::pos2(label_right, rect.bottom()),
     );
-    painter.text(
-        label_rect.center(),
-        egui::Align2::CENTER_CENTER,
-        &center_label,
-        FontId::proportional(12.5),
-        theme.ink,
-    );
+    let max_w = (label_right - label_left).max(0.0);
+    let font = FontId::proportional(12.0);
+
+    if max_w > 10.0 {
+        let display_text = ellipsize(painter, &center_label, &font, theme.ink, max_w)
+            .unwrap_or_else(|| center_label.clone());
+        painter.with_clip_rect(label_rect).text(
+            label_rect.center(),
+            egui::Align2::CENTER_CENTER,
+            &display_text,
+            font,
+            theme.ink,
+        );
+    }
 
     // Aura status agent di dasar pill saat minimal
     if ctx.agent.active {
@@ -954,6 +985,59 @@ pub(crate) fn progress_geometry(rect: Rect) -> Option<(Rect, f32)> {
 mod tests {
     use super::*;
     use eframe::egui::{pos2, vec2};
+
+    #[test]
+    fn clean_tool_name_membersihkan_prefix_mcp_dan_server() {
+        assert_eq!(clean_tool_name("mcp__terminal__read_terminal"), "read_terminal");
+        assert_eq!(clean_tool_name("mcp__filesystem__read_file"), "read_file");
+        assert_eq!(clean_tool_name("mcp:openbot:tool_call"), "tool_call");
+        assert_eq!(clean_tool_name("Bash"), "Bash");
+        assert_eq!(clean_tool_name("FileEdit"), "FileEdit");
+    }
+
+    #[test]
+    fn format_agent_status_label_menampilkan_status_dan_tool_rapi() {
+        let clock = "10:30";
+        let status_tool = noktah_core::model::AgentStatus::ToolRunning {
+            tool: "mcp__terminal__read_terminal".to_string(),
+            input: serde_json::Value::Null,
+            start_time: 0,
+        };
+        assert_eq!(format_agent_status_label(&status_tool, clock), "Claude: read_terminal");
+
+        let status_think = noktah_core::model::AgentStatus::PromptSubmitted {
+            prompt: "buatkan rencana".to_string(),
+            timestamp: 0,
+        };
+        assert_eq!(format_agent_status_label(&status_think, clock), "Claude Berpikir...");
+
+        let status_appr = noktah_core::model::AgentStatus::AwaitingApproval(noktah_core::model::PermissionRequest {
+            request_id: "1".to_string(),
+            tool_name: "Bash".to_string(),
+            tool_input: serde_json::Value::Null,
+            suggestions: Vec::new(),
+        });
+        assert_eq!(format_agent_status_label(&status_appr, clock), "Izin [Alt+Y / Alt+N]");
+
+        let status_idle = noktah_core::model::AgentStatus::Idle;
+        assert_eq!(format_agent_status_label(&status_idle, clock), "10:30");
+    }
+
+    #[test]
+    fn status_agent_minimal_pill_tidak_pernah_menabrak_maskot_maupun_equalizer() {
+        let rect = Rect::from_min_size(pos2(100.0, 0.0), vec2(260.0, 38.0));
+        let badge_d = 24.0;
+        let badge_right = rect.left() + 20.0 + badge_d;
+        let eq_left = rect.right() - 20.0 - (4.0 * 5.0 - 2.0);
+
+        let label_left = badge_right + 8.0;
+        let label_right = eq_left - 8.0;
+        let max_w = label_right - label_left;
+
+        assert!(label_left > badge_right, "label harus memiliki margin dari badge");
+        assert!(label_right < eq_left, "label harus memiliki margin dari equalizer");
+        assert!(max_w > 100.0, "tersedia ruang baca yang proporsional");
+    }
 
     #[test]
     fn slot_lirik_dinamis_tidak_pernah_menabrak_komponen_kanan_maupun_kiri() {

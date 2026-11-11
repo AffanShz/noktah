@@ -348,7 +348,7 @@ impl eframe::App for Noktah {
         } else if self.media.active {
             self.settings.mini_width(true, self.has_lyrics())
         } else if self.agent.active && self.settings.mini_agent {
-            240.0
+            260.0
         } else {
             180.0
         };
