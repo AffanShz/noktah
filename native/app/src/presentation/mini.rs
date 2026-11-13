@@ -169,8 +169,40 @@ fn ellipsize(painter: &Painter, line: &str, font: &FontId, color: Color32, max_w
     ok.or_else(|| Some(first_plus))
 }
 
+/// Pembersih nama tool Claude Code: menghapus prefix MCP berbelit
+/// (misal `mcp__terminal__read_terminal` menjadi `read_terminal`).
+pub(crate) fn clean_tool_name(tool: &str) -> &str {
+    if let Some(stripped) = tool.strip_prefix("mcp__") {
+        stripped.split("__").last().unwrap_or(stripped)
+    } else if let Some(stripped) = tool.strip_prefix("mcp:") {
+        stripped.split(':').last().unwrap_or(stripped)
+    } else {
+        tool
+    }
+}
+
+/// Format label status agent atau jam untuk pill minimal.
+pub(crate) fn format_agent_status_label(
+    status: &noktah_core::model::AgentStatus,
+    clock: &str,
+) -> String {
+    match status {
+        noktah_core::model::AgentStatus::AwaitingApproval(_) => {
+            "Izin [Alt+Y / Alt+N]".to_string()
+        }
+        noktah_core::model::AgentStatus::ToolRunning { tool, .. } => {
+            let clean = clean_tool_name(tool);
+            format!("Claude: {clean}")
+        }
+        noktah_core::model::AgentStatus::PromptSubmitted { .. } => {
+            "Claude Berpikir...".to_string()
+        }
+        _ => clock.to_string(),
+    }
+}
+
 /// Menggambar baris minimal saat tidak memutar musik:
-/// [ikon ♪/agent] + [jam/status] + [equalizer], mengikuti `.compact` di prototipe.
+/// [ikon ▶/agent] + [jam/status] + [equalizer], mengikuti `.compact` di prototipe.
 ///
 /// Prototipe selalu menampilkan lencana sampul kecil di kiri dan equalizer di
 /// kanan; jam mengisi sisa ruang di tengah.
@@ -178,66 +210,26 @@ fn draw_minimal_pill(painter: &Painter, rect: Rect, ctx: &MiniCtx) {
     let theme = ctx.theme;
     let cy = rect.center().y;
 
-    let (badge_icon, badge_color, center_label) = if ctx.agent.active {
-        match &ctx.agent.status {
-            noktah_core::model::AgentStatus::AwaitingApproval(_) => (
-                Icon::Bolt,
-                Color32::from_rgb(245, 158, 11),
-                "Izin [Alt+Y / Alt+N]".to_string(),
-            ),
-            noktah_core::model::AgentStatus::ToolRunning { tool, .. } => (
-                Icon::Bolt,
-                Color32::from_rgb(16, 185, 129),
-                format!("Claude: {}...", tool),
-            ),
-            noktah_core::model::AgentStatus::PromptSubmitted { .. } => (
-                Icon::Activity,
-                Color32::from_rgb(139, 92, 246),
-                "Claude Berpikir...".to_string(),
-            ),
-            _ => (
-                Icon::Bolt,
-                Color32::from_white_alpha(235),
-                ctx.clock.clone(),
-            ),
-        }
+    let center_label = if ctx.agent.active {
+        format_agent_status_label(&ctx.agent.status, &ctx.clock)
     } else {
-        (
-            Icon::Music,
-            Color32::from_white_alpha(235),
-            ctx.clock.clone(),
-        )
+        ctx.clock.clone()
     };
 
-    // 1. Lencana kecil di kiri (`.art.sm` 24×24, radius 8) - Avatar Mascot saat agent aktif
+    // 1. Lencana kecil di kiri (`.art.sm` 24×24, radius 8) - Maskot 2 mata interaktif Noki
     let badge_d = 24.0;
     let badge = Rect::from_center_size(
         egui::pos2(rect.left() + 20.0 + badge_d / 2.0, cy),
         egui::vec2(badge_d, badge_d),
     );
-    if ctx.agent.active && ctx.settings.mini_agent {
-        crate::presentation::mascot::MascotRenderer::draw_mini(
-            painter,
-            badge,
-            ctx.mascot,
-            &ctx.agent.status,
-            true,
-            ctx.t,
-        );
-    } else {
-        painter.rect_filled(
-            badge,
-            egui::Rounding::same(8.0),
-            Color32::from_white_alpha(28),
-        );
-        crate::presentation::widgets::glyph(
-            painter,
-            badge_icon,
-            Rect::from_center_size(badge.center(), egui::vec2(12.0, 12.0)),
-            badge_color,
-            1.5,
-        );
-    }
+    crate::presentation::mascot::MascotRenderer::draw_mini(
+        painter,
+        badge,
+        ctx.mascot,
+        &ctx.agent.status,
+        true,
+        ctx.t,
+    );
 
     // 2. Equalizer di kanan (`.eq`): 4 batang, jarak 2 px.
     let n_bars = 4;
@@ -260,17 +252,27 @@ fn draw_minimal_pill(painter: &Painter, rect: Rect, ctx: &MiniCtx) {
     }
 
     // 3. Jam / Status Claude mengisi ruang antara lencana dan equalizer.
+    // Dibatasi ketat dengan padding aman agar tidak menabrak badge (kiri) maupun equalizer (kanan).
+    let label_left = badge.right() + 8.0;
+    let label_right = eq_left - 8.0;
     let label_rect = Rect::from_min_max(
-        egui::pos2(badge.right() + 8.0, rect.top()),
-        egui::pos2(eq_left - 8.0, rect.bottom()),
+        egui::pos2(label_left, rect.top()),
+        egui::pos2(label_right, rect.bottom()),
     );
-    painter.text(
-        label_rect.center(),
-        egui::Align2::CENTER_CENTER,
-        &center_label,
-        FontId::proportional(12.5),
-        theme.ink,
-    );
+    let max_w = (label_right - label_left).max(0.0);
+    let font = FontId::proportional(12.0);
+
+    if max_w > 10.0 {
+        let display_text = ellipsize(painter, &center_label, &font, theme.ink, max_w)
+            .unwrap_or_else(|| center_label.clone());
+        painter.with_clip_rect(label_rect).text(
+            label_rect.center(),
+            egui::Align2::CENTER_CENTER,
+            &display_text,
+            font,
+            theme.ink,
+        );
+    }
 
     // Aura status agent di dasar pill saat minimal
     if ctx.agent.active {
@@ -282,7 +284,7 @@ pub fn draw(painter: &Painter, rect: Rect, ctx: &MiniCtx) {
     let theme = ctx.theme;
     let cy = rect.center().y;
 
-    // Tanpa lagu: jam, daya, dan waveform ala Nusa (70_notch_minimal_pill.png)
+    // Tanpa lagu: jam, daya, dan waveform 
     if !ctx.media.active {
         draw_minimal_pill(painter, rect, ctx);
         return;
@@ -483,13 +485,35 @@ pub fn draw(painter: &Painter, rect: Rect, ctx: &MiniCtx) {
         x += 175.0;
     }
 
-    // 3. Slot lirik selebar 240 px, terpusat di pill. Pembatas lama antara
-    //    judul dan lirik dihapus.
-    let slot_w = 240.0;
-    let slot_x = rect.center().x - 120.0;
-    let slot_clip = Rect::from_center_size(
-        egui::pos2(slot_x + slot_w * 0.5, cy),
-        egui::vec2(slot_w, LYR_HALF_H * 2.0),
+    // 3. Slot lirik dinamis: ruang bebas antara item kiri (sampul/judul)
+    //    dan item kanan (kontrol, equalizer, mascot, jam, cpu, ram).
+    //    Mencegah teks lirik menabrak maskot atau kontrol pada rasio apa pun.
+    let mut right_items_w = 0.0;
+    if ctx.settings.mini_controls { right_items_w += 64.0 + 6.0; }
+    if ctx.settings.mini_wave { right_items_w += 38.0 + 6.0; }
+    if ctx.agent.active && ctx.settings.mini_agent { right_items_w += 34.0 + 6.0; }
+    if ctx.settings.mini_clock { right_items_w += 64.0 + 6.0; }
+    if ctx.settings.mini_cpu { right_items_w += 54.0 + 6.0; }
+    if ctx.settings.mini_ram { right_items_w += 54.0 + 6.0; }
+
+    let slot_left = if x > rect.left() + PAD {
+        x + 8.0
+    } else {
+        rect.left() + PAD
+    };
+
+    let right_boundary = if right_items_w > 0.0 {
+        rect.right() - PAD - right_items_w + 6.0
+    } else {
+        rect.right() - PAD
+    };
+    let slot_right = (right_boundary - 8.0).max(slot_left + 20.0);
+
+    let slot_w = (slot_right - slot_left).max(20.0);
+    let slot_x = slot_left;
+    let slot_clip = Rect::from_min_max(
+        egui::pos2(slot_left, cy - LYR_HALF_H),
+        egui::pos2(slot_right, cy + LYR_HALF_H),
     )
     .intersect(painter.clip_rect());
 
@@ -963,6 +987,81 @@ mod tests {
     use eframe::egui::{pos2, vec2};
 
     #[test]
+    fn clean_tool_name_membersihkan_prefix_mcp_dan_server() {
+        assert_eq!(clean_tool_name("mcp__terminal__read_terminal"), "read_terminal");
+        assert_eq!(clean_tool_name("mcp__filesystem__read_file"), "read_file");
+        assert_eq!(clean_tool_name("mcp:openbot:tool_call"), "tool_call");
+        assert_eq!(clean_tool_name("Bash"), "Bash");
+        assert_eq!(clean_tool_name("FileEdit"), "FileEdit");
+    }
+
+    #[test]
+    fn format_agent_status_label_menampilkan_status_dan_tool_rapi() {
+        let clock = "10:30";
+        let status_tool = noktah_core::model::AgentStatus::ToolRunning {
+            tool: "mcp__terminal__read_terminal".to_string(),
+            input: serde_json::Value::Null,
+            start_time: 0,
+        };
+        assert_eq!(format_agent_status_label(&status_tool, clock), "Claude: read_terminal");
+
+        let status_think = noktah_core::model::AgentStatus::PromptSubmitted {
+            prompt: "buatkan rencana".to_string(),
+            timestamp: 0,
+        };
+        assert_eq!(format_agent_status_label(&status_think, clock), "Claude Berpikir...");
+
+        let status_appr = noktah_core::model::AgentStatus::AwaitingApproval(noktah_core::model::PermissionRequest {
+            request_id: "1".to_string(),
+            tool_name: "Bash".to_string(),
+            tool_input: serde_json::Value::Null,
+            suggestions: Vec::new(),
+        });
+        assert_eq!(format_agent_status_label(&status_appr, clock), "Izin [Alt+Y / Alt+N]");
+
+        let status_idle = noktah_core::model::AgentStatus::Idle;
+        assert_eq!(format_agent_status_label(&status_idle, clock), "10:30");
+    }
+
+    #[test]
+    fn status_agent_minimal_pill_tidak_pernah_menabrak_maskot_maupun_equalizer() {
+        let rect = Rect::from_min_size(pos2(100.0, 0.0), vec2(260.0, 38.0));
+        let badge_d = 24.0;
+        let badge_right = rect.left() + 20.0 + badge_d;
+        let eq_left = rect.right() - 20.0 - (4.0 * 5.0 - 2.0);
+
+        let label_left = badge_right + 8.0;
+        let label_right = eq_left - 8.0;
+        let max_w = label_right - label_left;
+
+        assert!(label_left > badge_right, "label harus memiliki margin dari badge");
+        assert!(label_right < eq_left, "label harus memiliki margin dari equalizer");
+        assert!(max_w > 100.0, "tersedia ruang baca yang proporsional");
+    }
+
+    #[test]
+    fn slot_lirik_dinamis_tidak_pernah_menabrak_komponen_kanan_maupun_kiri() {
+        let rect = Rect::from_min_size(pos2(100.0, 10.0), vec2(400.0, 38.0));
+        let pad = PAD;
+        // Simulasi item kiri OFF, tetapi maskot dan kontrol ON di kanan
+        let x_kiri = rect.left() + pad; // tidak ada art / judul
+        let mut right_w = 0.0;
+        let mini_agent = true; // maskot ON
+        if mini_agent { right_w += 34.0 + 6.0; }
+        let mini_controls = true; // kontrol ON
+        if mini_controls { right_w += 64.0 + 6.0; }
+
+        let slot_left = x_kiri;
+        let right_boundary = rect.right() - pad - right_w + 6.0;
+        let slot_right = (right_boundary - 8.0).max(slot_left + 20.0);
+        let slot_w = (slot_right - slot_left).max(20.0);
+
+        assert!(slot_left >= rect.left() + pad);
+        assert!(slot_right <= right_boundary - 8.0);
+        assert!(slot_left + slot_w <= right_boundary);
+    }
+
+    #[test]
     fn progress_kosong_ketika_pill_lebih_sempit_dari_dua_inset() {
         // Pill selebar <= 2*inset + 2 px tidak menyisakan ruang untuk jalur;
         // fungsi harus mengembalikan None supaya progress_aura tidak menggambar
@@ -1167,13 +1266,15 @@ fn comet_trail(
         mesh.colored_vertex(egui::pos2(x, jalur.bottom()), c);
 
         if i > 0 {
-            let prev = (mesh.vertices.len() - 2) as u32;
-            let cur = prev + 2;
+            let cur = (mesh.vertices.len() - 2) as u32;
+            let prev = cur - 2;
             mesh.add_triangle(prev, prev + 1, cur);
             mesh.add_triangle(prev + 1, cur + 1, cur);
         }
     }
-    painter.add(egui::Shape::mesh(mesh));
+    if mesh.is_valid() {
+        painter.add(egui::Shape::mesh(mesh));
+    }
 }
 
 /// Halo elips di ujung progres — titik terang yang membuat garis terbaca

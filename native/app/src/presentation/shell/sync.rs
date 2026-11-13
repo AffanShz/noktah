@@ -62,6 +62,7 @@ impl Noktah {
                 self.lyrics_status = LyricsStatus::Searching;
                 self.lyrics_provider.clear();
                 self.lyrics.clear();
+                self.lyrics_synced = false;
                 self.lyric_scroll_pos = 0.0;
                 self.lyric_target_scroll = 0.0;
                 self.last_active_lyric = None;
@@ -89,6 +90,7 @@ impl Noktah {
                 self.lyrics_status = LyricsStatus::Idle;
                 self.lyrics_provider.clear();
                 self.lyrics_for.clear();
+                self.lyrics_synced = false;
             }
         }
 
@@ -100,6 +102,7 @@ impl Noktah {
                     LyricsStatus::Found
                 };
                 self.lyrics = result.lines;
+                self.lyrics_synced = result.synced;
                 self.lyrics_provider = result.provider;
             }
         }

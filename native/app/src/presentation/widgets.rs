@@ -57,10 +57,39 @@ pub fn toggle(ui: &mut egui::Ui, value: &mut bool, theme: &Theme) -> bool {
 /// Kapital semua memperlambat membaca, dan garis itu menambah satu elemen
 /// visual untuk setiap bagian — padahal jarak sudah cukup memisahkan.
 /// Sekarang: teks biasa yang lebih tebal, tanpa garis.
-pub fn section(ui: &mut egui::Ui, judul: &str, theme: &Theme) {
-    ui.add_space(S3);
-    ui.label(style::heading(judul, theme.faint));
+pub fn section(ui: &mut egui::Ui, judul: &str, _theme: &Theme) {
+    ui.add_space(S2);
+    ui.label(
+        egui::RichText::new(judul)
+            .size(11.5)
+            .color(Color32::from_rgb(142, 142, 147)),
+    );
     ui.add_space(S1);
+}
+
+/// Kontainer kartu setelan modern (dark rounded card).
+pub fn card_group(ui: &mut egui::Ui, isi: impl FnOnce(&mut egui::Ui)) {
+    egui::Frame::none()
+        .fill(Color32::from_rgb(37, 37, 41))
+        .rounding(Rounding::same(style::R_GROUP))
+        .stroke(Stroke::new(1.0, Color32::from_white_alpha(10)))
+        .inner_margin(egui::Margin::symmetric(16.0, 14.0))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            isi(ui);
+        });
+    ui.add_space(S2);
+}
+
+/// Garis pemisah halus antar baris di dalam kartu.
+pub fn card_divider(ui: &mut egui::Ui) {
+    ui.add_space(6.0);
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 1.0), egui::Sense::hover());
+    ui.painter().line_segment(
+        [rect.left_top(), rect.right_top()],
+        Stroke::new(1.0, Color32::from_white_alpha(10)),
+    );
+    ui.add_space(6.0);
 }
 
 /// Baris label + kontrol di kanan.

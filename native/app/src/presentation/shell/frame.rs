@@ -59,13 +59,16 @@ impl Noktah {
         if self.transisi_at.is_some() {
             return Duration::from_millis(50);
         }
-        // Agent aktif sedang menjalankan tool atau menunggu izin
-        if self.agent.active {
+        // Maskot idle atau agent aktif butuh ~30 fps untuk breathing & gaze tracking
+        if !self.media.active || self.agent.active {
             if let noktah_core::model::AgentStatus::AwaitingApproval(_) = self.agent.status {
                 return Duration::from_millis(16); // 60fps untuk bouncy mascot hop
             }
             if let noktah_core::model::AgentStatus::ToolRunning { .. } = self.agent.status {
                 return Duration::from_millis(32); // 30fps untuk animasi komet & timer
+            }
+            if self.mascot.is_sleeping {
+                return Duration::from_millis(500);
             }
             return Duration::from_millis(32); // 30fps untuk breathing & gaze tracking mascot
         }
@@ -143,7 +146,10 @@ impl eframe::App for Noktah {
                     .with_inner_size([740.0, 520.0])
                     .with_min_inner_size([640.0, 460.0])
                     .with_decorations(true)
-                    .with_resizable(true),
+                    .with_resizable(true)
+                    // Jendela setelan selalu di atas: begitu dibuka ia langsung
+                    // terlihat, tidak tertutup jendela lain atau notch sendiri.
+                    .with_always_on_top(),
                 |ctx, _class| {
                     if self.draw_settings_window(ctx) {
                         close_settings = true;
@@ -272,31 +278,40 @@ impl eframe::App for Noktah {
         // Hover intent: panel tidak membuka begitu kursor menyentuh. Ia
         // menunggu kursor diam selama `hover_delay_ms` — jalan kaki yang
         // sekadar lewat di atas notch tidak lagi membukanya.
-        let berubah;
-        if inside && !self.hovered {
+        if !inside {
+            self.suppress_hover = false;
+        }
+        let can_hover = !self.suppress_hover;
+
+        let mut berubah = false;
+        if inside && !self.hovered && can_hover {
             let since = *self.hover_since.get_or_insert(Instant::now());
             let jeda = Duration::from_millis(self.settings.hover_delay_ms as u64);
             if since.elapsed() >= jeda {
                 self.hover_since = None;
                 berubah = true;
-            } else {
-                berubah = false;
             }
         } else {
             if !inside {
                 self.hover_since = None;
-                // JANGAN tutup jendela setelan di sini.
-                //
-                // Jendela setelan adalah viewport terpisah: begitu kursor
-                // pindah ke sana, ia otomatis berada DI LUAR bentuk notch,
-                // sehingga `inside` bernilai false setiap frame. Dulu baris
-                // `self.show_settings = false` ada di sini dan akibatnya
-                // jendela menutup sendiri tepat ketika pengguna hendak
-                // mengklik kontrolnya. Jendela kini hanya ditutup lewat
-                // tombol Close atau tombol X pada titlebar-nya.
             }
-            berubah = inside != self.hovered;
+            if inside != self.hovered {
+                berubah = true;
+            }
         }
+
+        // Guard anti-stuck: jika cursor di luar dan tidak ada pending approval,
+        // panel wajib menutup kembali ke minimize.
+        if !inside && self.pending_permission.is_none() && self.open.target > 0.0 {
+            self.open.target = 0.0;
+            self.open_h.target = 0.0;
+            self.hovered = false;
+            self.hover_since = None;
+            self.open_h.set_spec(MORPH_CLOSE_H);
+            self.open.set_spec(MORPH_CLOSE_W);
+            berubah = false;
+        }
+
         if berubah {
             self.hovered = inside;
             let target = if inside { 1.0 } else { 0.0 };
@@ -333,7 +348,7 @@ impl eframe::App for Noktah {
         } else if self.media.active {
             self.settings.mini_width(true, self.has_lyrics())
         } else if self.agent.active && self.settings.mini_agent {
-            240.0
+            260.0
         } else {
             180.0
         };
@@ -487,7 +502,12 @@ impl eframe::App for Noktah {
         // Pembaruan fisika & ekspresi mascot Noki
         let (mx, my) = self.hover.get();
         let cursor_pos = Some(egui::pos2(mx, my));
-        let mascot_center = current_base.center();
+        let is_minimized = self.open.pos < 0.2;
+        let mascot_center = if is_minimized {
+            egui::pos2(current_base.left() + 32.0, current_base.center().y)
+        } else {
+            current_base.center()
+        };
         let anim_t = self.anim.elapsed().as_secs_f32();
         self.mascot.update(
             dt,
@@ -495,7 +515,7 @@ impl eframe::App for Noktah {
             cursor_pos,
             mascot_center,
             &self.agent.status,
-            self.agent.active,
+            true,
         );
 
         // Posisi lagu dihaluskan di antara dua pembacaan SMTC (500 ms),

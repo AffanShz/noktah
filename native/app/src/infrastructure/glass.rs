@@ -275,7 +275,7 @@ pub fn ears(painter: &Painter, rect: Rect, size: f32, theme: &Theme) {
     );
 }
 
-/// Ambient aura: pendaran cahaya dinamis yang memancar dari tepi bawah notch ke desktop (ala Nusa).
+/// Ambient aura: pendaran cahaya dinamis yang memancar dari tepi bawah notch ke desktop .
 pub fn ambient_aura(painter: &Painter, rect: Rect, color: Color32, alpha_mult: f32) {
     let alpha_mult = alpha_mult.clamp(0.0, 1.0);
     if alpha_mult <= 0.01 {

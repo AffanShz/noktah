@@ -69,6 +69,7 @@ pub struct Noktah {
 
     pub media: MediaState,
     pub lyrics: Vec<lrc::LrcLine>,
+    pub lyrics_synced: bool,
     pub lyrics_status: LyricsStatus,
     pub lyrics_provider: String,
     pub music: MusicHandle,
@@ -131,7 +132,7 @@ pub struct Noktah {
     pub banner: Option<(String, Instant)>,
     pub(crate) save_at: Option<Instant>,
     pub lang: Lang,
-    /// Buka jendela/screen setelan baru ala Nusa (Image 4).
+    /// Buka jendela/screen setelan baru sekunder.
     pub show_settings: bool,
     pub(crate) settings_tab: SettingsTab,
     /// 0 = dock menganggur (tiga garis), 1 = dock terbuka penuh.
@@ -154,6 +155,7 @@ pub struct Noktah {
     pub last_pomodoro_tick: Instant,
     pub(crate) idle_since: Option<Instant>,
     pub(crate) trimmed: bool,
+    pub(crate) suppress_hover: bool,
     pub agent: noktah_core::model::AgentState,
     pub mascot: crate::presentation::mascot::MascotState,
     pub pending_permission: Option<(
@@ -254,6 +256,9 @@ pub enum LyricsStatus {
 }
 
 impl Noktah {
+    pub fn is_lyrics_synced(&self) -> bool {
+        !self.lyrics.is_empty() && (self.lyrics_synced || self.lyrics.iter().any(|l| l.time >= 0.0))
+    }
     pub fn new(renderer: String, hover: Arc<Hover>, ctx: &egui::Context) -> Self {
         let mut settings: Settings = store::load("settings.json");
         let force_anim = settings.force_animation;
@@ -308,6 +313,7 @@ impl Noktah {
             todo_due: String::new(),
             media: MediaState::default(),
             lyrics: Vec::new(),
+            lyrics_synced: false,
             lyrics_status: LyricsStatus::Idle,
             lyrics_provider: String::new(),
             music: music::spawn(ctx.clone()),
@@ -359,6 +365,7 @@ impl Noktah {
             lang,
             idle_since: None,
             trimmed: false,
+            suppress_hover: false,
             agent: noktah_core::model::AgentState::default(),
             mascot: crate::presentation::mascot::MascotState::new(),
             pending_permission: None,

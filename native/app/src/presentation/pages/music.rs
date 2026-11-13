@@ -183,11 +183,11 @@ impl Noktah {
 
         let body_h = area.height().max(60.0);
         let elapsed_manual = self.lyric_manual_at.elapsed();
-        let auto_scroll = elapsed_manual >= std::time::Duration::from_secs(3);
-        if !auto_scroll {
+        let auto_scroll = self.is_lyrics_synced() && elapsed_manual >= std::time::Duration::from_secs(3);
+        if self.is_lyrics_synced() && !auto_scroll {
             let remain = std::time::Duration::from_secs(3) - elapsed_manual;
             ui.ctx().request_repaint_after(remain);
-        } else {
+        } else if auto_scroll {
             if self.reduce_motion {
                 self.lyric_scroll_pos = self.lyric_target_scroll;
             } else {
@@ -590,14 +590,18 @@ impl Noktah {
                             // (fonts.rs: Proportional dimulai dari "skynight").
                             // Alpha murni nilai paint — tidak bisa mengganggu geometri.
                             let alpha = match aktif {
-                                None => 110.0,
+                                None => if self.is_lyrics_synced() { 110.0 } else { 190.0 },
                                 Some(_) => lyric_alpha((idx as f32 - self.lyric_anim_pos.pos).abs()),
                             };
 
                             // Ukuran huruf baris ini sebagai fungsi jarak dari posisi
                             // aktif (kontinu). Baris tetangga/selebihnya = 13.5 px.
                             let d = (idx as f32 - self.lyric_anim_pos.pos).abs();
-                            let size_teks = lyric_size(d);
+                            let size_teks = if self.is_lyrics_synced() {
+                                lyric_size(d)
+                            } else {
+                                LYRIC_SIZE
+                            };
                             let font_id = egui::FontId::proportional(size_teks);
 
                             let item_alpha = (alpha * t_lyr).clamp(0.0, 255.0);
@@ -664,7 +668,7 @@ impl Noktah {
                                 Id::new("p_lyric_click").with(idx),
                                 Sense::click(),
                             );
-                            if line_resp.clicked() {
+                            if line_resp.clicked() && line.time >= 0.0 {
                                 seek = Some(noktah_core::lrc::seek_target_ms(
                                     line.time,
                                     self.settings.lyric_offset_ms,
@@ -687,7 +691,7 @@ impl Noktah {
                     // sejak frame 0 sehingga easing `1 - exp(-8.5*dt)` yang ada
                     // benar-benar meredam ramp, bukan lompatan.
                     let n = row_center.len();
-                    if n > 0 {
+                    if n > 0 && self.is_lyrics_synced() && aktif.is_some() {
                         let p = self.lyric_anim_pos.pos.clamp(0.0, (n - 1) as f32);
                         let i0 = p.floor() as usize;
                         let i1 = (i0 + 1).min(n - 1);
