@@ -3,6 +3,19 @@
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/),
 versi mengikuti [SemVer](https://semver.org/lang/id/).
 
+## [1.1.0] - 2026-11-14
+
+### Ditambahkan
+- **Maskot Noki Interaktif & Universal Gaze Tracking** — Avatar superellipse ekspresif dengan pelacakan kursor global lintas aplikasi, respons dinamis terhadap musik/lirik, serta animasi squish, pusing (dizzy), kedip alami, dan tidur otomatis (>45 detik tidak aktif).
+- **Redesain Antarmuka Setelan** — Panel pengaturan modern berbasis secondary viewport native (*always-on-top*) dengan sidebar berkategori rapi (General, Display, Appearance, Music & Lyrics, Tasks, Pomodoro, AI Assistant, About).
+- **Fallback Multi-Provider Lirik** — Integrasi pencarian lirik tersinkronisasi lintas penyedia (LRCLIB, KuGou, NetEase) sebelum jatuh ke fallback lirik teks polos.
+
+### Diperbaiki
+- **Slot Lirik Dinamis Anti-Tabrakan** — Batas slot lirik di baris compact dihitung dinamis di antara komponen kiri dan kanan, dilengkapi pemotongan rapi (ellipsize) dan clipping agar teks lirik panjang tidak pernah menabrak maskot Noki maupun kontrol.
+- **Evaluasi Binary Search Lirik Polos** — Memperbaiki penanganan lirik tanpa timestamp (`time < 0.0`) agar tidak terkunci di baris terakhir dan tidak menarik scroll paksa ke dasar.
+- **Tampilan Status Claude Code di Compact Notch** — Pembersihan identifier panjang MCP (misal `mcp__terminal__...` disederhanakan) serta penataan layout agar label status agen tidak tumpang-tindih dengan avatar atau equalizer.
+- **Auto-Minimize Setelah Approval** — Panel notch otomatis menutup rapi setelah pengguna menekan tombol persetujuan izin pada halaman Agent, dilengkapi pencegahan stuck hover state.
+
 ## [1.0.0] - 2026-11-08
 
 Rilis pertama. Aplikasi ini adalah overlay notch untuk Windows 10/11 yang
