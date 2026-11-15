@@ -141,7 +141,6 @@ impl eframe::App for Noktah {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-
         if self.frames == 0 {
             let mut visuals = egui::Visuals::dark();
             // Background warna gelap elegan untuk input TextEdit (#1C1D22) agar batas kotaknya jelas di atas latar hitam
@@ -488,6 +487,7 @@ impl eframe::App for Noktah {
         self.poll_weather();
         self.poll_quota();
         self.poll_ipc();
+        self.poll_updater();
 
         // Pembaruan fisika & ekspresi mascot Noki
         let (mx, my) = self.hover.get();

@@ -19,4 +19,5 @@ pub mod quota;
 pub mod secret;
 pub mod store;
 pub mod sys;
+pub mod updater;
 pub mod weather;

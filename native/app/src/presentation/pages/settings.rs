@@ -559,6 +559,68 @@ impl Noktah {
             ui.label(style::cap("© 2026 AffanShz. MIT License.", theme.faint));
         });
 
+        widgets::section(ui, "Pembaruan", &theme);
+        widgets::card_group(ui, |ui| {
+            ui.horizontal(|ui| {
+                let checking = matches!(self.update_status, crate::infrastructure::updater::UpdateStatus::Checking);
+                let btn_label = if checking { "Memeriksa…" } else { "Periksa Pembaruan" };
+                if widgets::chip_button(ui, btn_label, checking, &theme) && !checking {
+                    let _ = self.updater.tx.send(());
+                }
+            });
+
+            ui.add_space(6.0);
+
+            match &self.update_status {
+                crate::infrastructure::updater::UpdateStatus::Idle => {
+                    ui.label(style::cap("Klik tombol di atas untuk memeriksa rilis terbaru di GitHub.", theme.dim));
+                }
+                crate::infrastructure::updater::UpdateStatus::Checking => {
+                    ui.label(style::cap("Menghubungi GitHub Releases…", theme.accent));
+                }
+                crate::infrastructure::updater::UpdateStatus::LatestVersion(ver) => {
+                    ui.label(
+                        egui::RichText::new(format!("✓ Noktah sudah menggunakan versi terbaru ({ver})"))
+                            .size(style::T_CAPTION)
+                            .color(Color32::from_rgb(34, 197, 94)),
+                    );
+                }
+                crate::infrastructure::updater::UpdateStatus::UpdateAvailable { version, name, body, url } => {
+                    ui.label(
+                        egui::RichText::new(format!("★ Pembaruan Tersedia: {name} ({version})"))
+                            .size(style::T_BODY)
+                            .strong()
+                            .color(theme.accent),
+                    );
+
+                    if !body.trim().is_empty() {
+                        ui.add_space(4.0);
+                        let snippet: String = body.lines().take(6).collect::<Vec<_>>().join("\n");
+                        ui.label(style::cap(snippet, theme.dim));
+                    }
+
+                    ui.add_space(6.0);
+                    let url_clone = url.clone();
+                    if widgets::chip_button(ui, "Buka Halaman Rilis GitHub ↗", false, &theme) {
+                        ui.ctx().open_url(egui::OpenUrl::new_tab(&url_clone));
+                        #[cfg(windows)]
+                        {
+                            let _ = std::process::Command::new("cmd")
+                                .args(["/C", "start", "", &url_clone])
+                                .spawn();
+                        }
+                    }
+                }
+                crate::infrastructure::updater::UpdateStatus::Error(err) => {
+                    ui.label(
+                        egui::RichText::new(format!("Gagal: {err}"))
+                            .size(style::T_CAPTION)
+                            .color(Color32::from_rgb(239, 68, 68)),
+                    );
+                }
+            }
+        });
+
         widgets::section(ui, i18n::t(lang, "settings.data"), &theme);
         widgets::card_group(ui, |ui| {
             ui.horizontal(|ui| {

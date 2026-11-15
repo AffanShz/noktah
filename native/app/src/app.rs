@@ -65,7 +65,6 @@ pub struct Noktah {
 
     pub todos: Vec<Todo>,
     pub todo_input: String,
-    pub(crate) todo_due: String,
 
     pub media: MediaState,
     pub lyrics: Vec<lrc::LrcLine>,
@@ -90,7 +89,8 @@ pub struct Noktah {
     /// — dibedakan dari snapshot kosong, yang berarti "sudah dibaca, gagal".
     pub quota: Option<crate::infrastructure::quota::QuotaSnapshot>,
     pub quota_worker: crate::infrastructure::quota::QuotaHandle,
-    pub(crate) applied_glass: Option<noktah_core::settings::GlassEffect>,
+    pub updater: crate::infrastructure::updater::UpdaterHandle,
+    pub update_status: crate::infrastructure::updater::UpdateStatus,
     pub reduce_motion: bool,
     /// 0 = baris minimized biasa, 1 = garis tipis. Dianimasikan, bukan boolean,
     /// supaya transisi antar-lagu bisa mengecil lalu membesar kembali.
@@ -203,14 +203,12 @@ impl NotchPage {
     /// Jumlah halaman yang ikut siklus chevron.
     pub const COUNT: usize = Self::SWITCHER.len();
 
-    /// Posisi halaman di dalam `SWITCHER`. Halaman sekunder (NowPlaying,
-    /// Water) tidak ada di daftar; `None` membuat chevron memperlakukannya
-    /// sebagai "kembali ke Music".
+    /// Posisi halaman di dalam `SWITCHER`.
     fn switcher_index(&self) -> Option<usize> {
         Self::SWITCHER.iter().position(|p| p == self)
     }
 
-    /// Halaman sebelumnya dalam siklus. Halaman sekunder kembali ke Music.
+    /// Halaman sebelumnya dalam siklus (rotasi memutar).
     pub fn prev(&self) -> Self {
         match self.switcher_index() {
             Some(0) => Self::SWITCHER[Self::SWITCHER.len() - 1],
@@ -219,7 +217,7 @@ impl NotchPage {
         }
     }
 
-    /// Halaman berikutnya dalam siklus. Halaman sekunder kembali ke Music.
+    /// Halaman berikutnya dalam siklus (rotasi memutar).
     pub fn next(&self) -> Self {
         match self.switcher_index() {
             Some(i) if i + 1 < Self::SWITCHER.len() => Self::SWITCHER[i + 1],
@@ -315,7 +313,6 @@ impl Noktah {
             stats_at: Instant::now(),
             todos,
             todo_input: String::new(),
-            todo_due: String::new(),
             media: MediaState::default(),
             lyrics: Vec::new(),
             lyrics_synced: false,
@@ -337,7 +334,8 @@ impl Noktah {
             weather_city: String::new(),
             quota: None,
             quota_worker: crate::infrastructure::quota::spawn(ctx.clone()),
-            applied_glass: None,
+            updater: crate::infrastructure::updater::spawn(ctx.clone()),
+            update_status: crate::infrastructure::updater::UpdateStatus::Idle,
             reduce_motion: !crate::infrastructure::os::animations_enabled() && !force_anim,
             minimal_mix: Spring::from_spec(
                 if settings_minimal { 1.0 } else { 0.0 },

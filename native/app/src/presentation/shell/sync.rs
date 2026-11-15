@@ -398,4 +398,10 @@ impl Noktah {
             }
         }
     }
+
+    pub(crate) fn poll_updater(&mut self) {
+        while let Ok(st) = self.updater.rx.try_recv() {
+            self.update_status = st;
+        }
+    }
 }

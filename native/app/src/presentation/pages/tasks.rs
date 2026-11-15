@@ -23,7 +23,16 @@ impl Noktah {
         let open_count = self.todo_open_count();
         let done_count = self.todos.iter().filter(|t| t.done).count();
 
-        let _header_h = widgets::page_header(ui, "TASKS", &theme, |ui| {
+        let header_title = {
+            let name = self.settings.user_name.trim();
+            if name.is_empty() || name.eq_ignore_ascii_case("you") || name.eq_ignore_ascii_case("kamu") {
+                "TASKS".to_string()
+            } else {
+                format!("TASKS • {}", name.to_uppercase())
+            }
+        };
+
+        let _header_h = widgets::page_header(ui, &header_title, &theme, |ui| {
             let teks = if self.todos.is_empty() {
                 String::new()
             } else if open_count > 0 {
@@ -97,7 +106,15 @@ impl Noktah {
                     // `.empty` di prototipe: dua baris, keduanya redup.
                     ui.vertical_centered(|ui| {
                         ui.add_space(style::S1);
-                        ui.label(style::subtitle("Nothing here yet", theme.dim));
+                        let greeting = {
+                            let name = self.settings.user_name.trim();
+                            if name.is_empty() || name.eq_ignore_ascii_case("you") || name.eq_ignore_ascii_case("kamu") {
+                                "Nothing here yet".to_string()
+                            } else {
+                                format!("Semua beres, {name}!")
+                            }
+                        };
+                        ui.label(style::subtitle(greeting, theme.dim));
                         ui.label(style::cap("Add your first task above", theme.faint));
                     });
                     return;
