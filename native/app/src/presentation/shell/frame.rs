@@ -137,29 +137,7 @@ impl eframe::App for Noktah {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        if self.show_settings {
-            let mut close_settings = false;
-            ctx.show_viewport_immediate(
-                egui::ViewportId::from_hash_of("noktah_settings_window"),
-                egui::ViewportBuilder::default()
-                    .with_title("Noktah Settings")
-                    .with_inner_size([740.0, 520.0])
-                    .with_min_inner_size([640.0, 460.0])
-                    .with_decorations(true)
-                    .with_resizable(true)
-                    // Jendela setelan selalu di atas: begitu dibuka ia langsung
-                    // terlihat, tidak tertutup jendela lain atau notch sendiri.
-                    .with_always_on_top(),
-                |ctx, _class| {
-                    if self.draw_settings_window(ctx) {
-                        close_settings = true;
-                    }
-                },
-            );
-            if close_settings {
-                self.show_settings = false;
-            }
-        }
+
         if self.frames == 0 {
             let mut visuals = egui::Visuals::dark();
             // Background warna gelap elegan untuk input TextEdit (#1C1D22) agar batas kotaknya jelas di atas latar hitam
@@ -547,6 +525,32 @@ impl eframe::App for Noktah {
         let panel_alpha = ((self.open_h.pos - 0.20) / 0.65).clamp(0.0, 1.0);
         if panel_alpha > 0.01 {
             self.draw_panel(ctx, current_base, current_outer, panel_alpha);
+        }
+
+        // Secondary viewport (Settings) digambar setelah render shell & panel utama selesai,
+        // mencegah glitch putih akibat context Glow switch di awal frame.
+        if self.show_settings {
+            let mut close_settings = false;
+            ctx.show_viewport_immediate(
+                egui::ViewportId::from_hash_of("noktah_settings_window"),
+                egui::ViewportBuilder::default()
+                    .with_title("Noktah Settings")
+                    .with_inner_size([740.0, 520.0])
+                    .with_min_inner_size([640.0, 460.0])
+                    .with_decorations(true)
+                    .with_resizable(true)
+                    // Jendela setelan selalu di atas: begitu dibuka ia langsung
+                    // terlihat, tidak tertutup jendela lain atau notch sendiri.
+                    .with_always_on_top(),
+                |ctx, _class| {
+                    if self.draw_settings_window(ctx) {
+                        close_settings = true;
+                    }
+                },
+            );
+            if close_settings {
+                self.show_settings = false;
+            }
         }
 
         // --- hemat memori saat bentuk tertutup dan stabil (trim working set) -

@@ -459,7 +459,10 @@ impl Noktah {
                         .changed()
                     {
                         self.settings.focus_minutes = menit as u32;
-                        self.pomodoro.set_mode(PomodoroMode::Focus);
+                        if !self.pomodoro.running && self.pomodoro.mode == PomodoroMode::Focus {
+                            self.pomodoro.remaining_secs = self.settings.focus_minutes * 60;
+                            self.save_pomodoro();
+                        }
                         self.touch_settings();
                     }
                     ui.label(style::cap(
@@ -481,6 +484,16 @@ impl Noktah {
                     .changed()
                 {
                     self.settings.break_minutes = menit as u32;
+                    if !self.pomodoro.running {
+                        if self.pomodoro.mode == PomodoroMode::ShortBreak {
+                            self.pomodoro.remaining_secs = self.settings.break_minutes * 60;
+                            self.save_pomodoro();
+                        } else if self.pomodoro.mode == PomodoroMode::LongBreak {
+                            self.pomodoro.remaining_secs =
+                                (self.settings.break_minutes * 3).max(15) * 60;
+                            self.save_pomodoro();
+                        }
+                    }
                     self.touch_settings();
                 }
                 ui.label(style::cap(

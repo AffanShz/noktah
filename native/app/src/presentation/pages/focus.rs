@@ -18,7 +18,11 @@ impl Noktah {
     pub(crate) fn draw_page_pomodoro(&mut self, ui: &mut egui::Ui, area: Rect) {
         let theme = self.theme;
         let rem = self.pomodoro.remaining_secs;
-        let total = self.pomodoro.mode.duration_secs().max(1);
+        let total = self
+            .pomodoro
+            .mode
+            .duration_secs_custom(self.settings.focus_minutes, self.settings.break_minutes)
+            .max(1);
         let frac = 1.0 - (rem as f32 / total as f32).clamp(0.0, 1.0);
 
         let header_h = widgets::page_header(ui, "FOCUS", &theme, |ui| {
@@ -114,7 +118,11 @@ impl Noktah {
                                 1 => PomodoroMode::ShortBreak,
                                 _ => PomodoroMode::LongBreak,
                             };
-                            self.pomodoro.set_mode(mode);
+                            self.pomodoro.set_mode_with(
+                                mode,
+                                self.settings.focus_minutes,
+                                self.settings.break_minutes,
+                            );
                             self.save_pomodoro();
                         }
 
@@ -129,7 +137,10 @@ impl Noktah {
                                 }
                                 ui.add_space(style::S2);
                                 if widgets::pill_button(ui, "Reset", false, &theme) {
-                                    self.pomodoro.reset();
+                                    self.pomodoro.reset_with(
+                                        self.settings.focus_minutes,
+                                        self.settings.break_minutes,
+                                    );
                                     self.save_pomodoro();
                                 }
                             },

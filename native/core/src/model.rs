@@ -134,6 +134,14 @@ impl PomodoroMode {
         }
     }
 
+    pub fn duration_secs_custom(&self, focus_m: u32, break_m: u32) -> u32 {
+        match self {
+            PomodoroMode::Focus => focus_m.max(1) * 60,
+            PomodoroMode::ShortBreak => break_m.max(1) * 60,
+            PomodoroMode::LongBreak => (break_m * 3).max(15) * 60,
+        }
+    }
+
     pub fn label(&self) -> &'static str {
         match self {
             PomodoroMode::Focus => "Fokus",
@@ -170,6 +178,12 @@ impl PomodoroState {
         self.remaining_secs = mode.duration_secs();
     }
 
+    pub fn set_mode_with(&mut self, mode: PomodoroMode, focus_m: u32, break_m: u32) {
+        self.mode = mode;
+        self.running = false;
+        self.remaining_secs = mode.duration_secs_custom(focus_m, break_m);
+    }
+
     pub fn toggle_run(&mut self) {
         self.running = !self.running;
     }
@@ -177,6 +191,11 @@ impl PomodoroState {
     pub fn reset(&mut self) {
         self.running = false;
         self.remaining_secs = self.mode.duration_secs();
+    }
+
+    pub fn reset_with(&mut self, focus_m: u32, break_m: u32) {
+        self.running = false;
+        self.remaining_secs = self.mode.duration_secs_custom(focus_m, break_m);
     }
 
     pub fn tick(&mut self) -> bool {
@@ -447,6 +466,28 @@ mod tests {
         let raw = serde_json::to_string(&w).unwrap();
         let back: WaterState = serde_json::from_str(&raw).unwrap();
         assert_eq!(w, back);
+    }
+
+    #[test]
+    fn pomodoro_durasi_kustom_dan_reset_with() {
+        let mut p = PomodoroState::default();
+        assert_eq!(p.remaining_secs, 25 * 60);
+
+        p.set_mode_with(PomodoroMode::Focus, 50, 10);
+        assert_eq!(p.remaining_secs, 50 * 60);
+
+        p.set_mode_with(PomodoroMode::ShortBreak, 50, 10);
+        assert_eq!(p.remaining_secs, 10 * 60);
+
+        p.set_mode_with(PomodoroMode::LongBreak, 50, 10);
+        assert_eq!(p.remaining_secs, 30 * 60);
+
+        p.toggle_run();
+        p.tick();
+        assert_eq!(p.remaining_secs, 30 * 60 - 1);
+        p.reset_with(50, 10);
+        assert_eq!(p.remaining_secs, 30 * 60);
+        assert!(!p.running);
     }
 
     #[test]

@@ -63,12 +63,53 @@ fn load_app_icon() -> Option<egui::IconData> {
     })
 }
 
+fn setup_panic_logger() {
+    std::panic::set_hook(Box::new(|info| {
+        let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
+        let location = info
+            .location()
+            .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
+            .unwrap_or_else(|| "unknown location".to_string());
+        let payload = if let Some(s) = info.payload().downcast_ref::<&str>() {
+            *s
+        } else if let Some(s) = info.payload().downcast_ref::<String>() {
+            s.as_str()
+        } else {
+            "unknown panic payload"
+        };
+        let thread = std::thread::current();
+        let thread_name = thread.name().unwrap_or("unnamed");
+
+        let log_line = format!(
+            "[{}] PANIC in thread '{}' at {}:\n  {}\n\n",
+            timestamp, thread_name, location, payload
+        );
+
+        eprintln!("{}", log_line);
+
+        let logs_dir = infrastructure::store::data_dir().join("logs");
+        let _ = std::fs::create_dir_all(&logs_dir);
+        let crash_file = logs_dir.join("crash.log");
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(crash_file)
+        {
+            use std::io::Write;
+            let _ = f.write_all(log_line.as_bytes());
+        }
+    }));
+}
+
 fn main() -> eframe::Result<()> {
+    setup_panic_logger();
+
     // Satu instance saja: notch kedua akan menimpa yang pertama.
     if !infrastructure::os::claim_single_instance() {
         return Ok(());
     }
 
+    let settings: noktah_core::settings::Settings = infrastructure::store::load("settings.json");
     let x = infrastructure::platform::initial_position();
 
     let mut viewport = egui::ViewportBuilder::default()
@@ -79,9 +120,12 @@ fn main() -> eframe::Result<()> {
         .with_position([x, 0.0])
         .with_decorations(false)
         .with_transparent(true)
-        .with_always_on_top()
         .with_resizable(false)
         .with_taskbar(false);
+
+    if settings.always_on_top {
+        viewport = viewport.with_always_on_top();
+    }
 
     if let Some(icon) = load_app_icon() {
         viewport = viewport.with_icon(icon);
