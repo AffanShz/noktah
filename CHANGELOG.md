@@ -3,6 +3,21 @@
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/),
 versi mengikuti [SemVer](https://semver.org/lang/id/).
 
+## [1.2.0] - 2026-11-15
+
+### Ditambahkan
+- **In-App Update Checker** — Pemeriksa pembaruan otomatis terintegrasi GitHub Releases API di tab Tentang (Settings) dengan deteksi versi, catatan rilis (changelog), dan link download rilis langsung.
+- **HUD Banner Notch** — Notifikasi visual notch pill yang berekspansi mikro (340 px) saat sesi Pomodoro selesai atau pengingat hidrasi tiba, serta floating toast di dasar panel terbuka.
+- **Aktivasi Modul Water & NowPlaying di Switcher** — Siklus dock lengkap 9 halaman (Home, Music, NowPlaying, Pomodoro, Water, Tasks, System, Ask, Agent) dengan rotasi memutar dan ikon khusus.
+- **Background Ticker & Auto-Reset Harian Hidrasi** — Reset otomatis kuota air minum harian dan sesi Pomodoro di tengah malam kalender lokal, disertai pengingat hidrasi berkala.
+- **Pengaturan Durasi Pomodoro Dinamis** — Dukungan kustomisasi menit fokus dan istirahat pada slider pengaturan yang langsung tersinkronisasi ke timer aktif.
+- **Local Crash & Panic Logger** — Pencatatan panic hook otomatis ke berkas `%APPDATA%\Noktah\logs\crash.log`.
+
+### Diperbaiki
+- **Eliminasi Glitch Putih Secondary Viewport** — Pemindahan eksekusi render secondary viewport (Settings) ke akhir frame pass sehingga tidak memotong rendering Glow GL context notch utama.
+- **Polesan Gaze Tracking Maskot Noki saat Idle** — Integrasi lerp smoothing pada tatapan mata maskot di miniatur maupun kartu, serta penambahan wandering gaze organik saat kursor diam santai.
+- **Pembersihan Dead Fields & Personalisasi To-Do** — Penghapusan field compiler warning yang tak terpakai (`todo_due`, `applied_glass`) dan penyambungan nama pengguna `user_name` ke judul header dan salam tugas.
+
 ## [1.1.0] - 2026-11-14
 
 ### Ditambahkan
