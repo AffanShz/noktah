@@ -39,6 +39,7 @@ pub struct MiniCtx<'a> {
     pub reduce_motion: bool,
     pub agent: &'a noktah_core::model::AgentState,
     pub mascot: &'a crate::presentation::mascot::MascotState,
+    pub banner: Option<&'a str>,
 }
 
 const PAD: f32 = 20.0;
@@ -210,7 +211,9 @@ fn draw_minimal_pill(painter: &Painter, rect: Rect, ctx: &MiniCtx) {
     let theme = ctx.theme;
     let cy = rect.center().y;
 
-    let center_label = if ctx.agent.active {
+    let center_label = if let Some(banner) = ctx.banner {
+        banner.to_string()
+    } else if ctx.agent.active {
         format_agent_status_label(&ctx.agent.status, &ctx.clock)
     } else {
         ctx.clock.clone()
@@ -263,14 +266,19 @@ fn draw_minimal_pill(painter: &Painter, rect: Rect, ctx: &MiniCtx) {
     let font = FontId::proportional(12.0);
 
     if max_w > 10.0 {
-        let display_text = ellipsize(painter, &center_label, &font, theme.ink, max_w)
+        let text_color = if ctx.banner.is_some() {
+            theme.accent
+        } else {
+            theme.ink
+        };
+        let display_text = ellipsize(painter, &center_label, &font, text_color, max_w)
             .unwrap_or_else(|| center_label.clone());
         painter.with_clip_rect(label_rect).text(
             label_rect.center(),
             egui::Align2::CENTER_CENTER,
             &display_text,
             font,
-            theme.ink,
+            text_color,
         );
     }
 
@@ -284,8 +292,8 @@ pub fn draw(painter: &Painter, rect: Rect, ctx: &MiniCtx) {
     let theme = ctx.theme;
     let cy = rect.center().y;
 
-    // Tanpa lagu: jam, daya, dan waveform 
-    if !ctx.media.active {
+    // Jika ada banner HUD aktif atau tanpa lagu: tampilkan pill minimal / HUD banner
+    if ctx.banner.is_some() || !ctx.media.active {
         draw_minimal_pill(painter, rect, ctx);
         return;
     }

@@ -59,6 +59,10 @@ impl Noktah {
         if self.transisi_at.is_some() {
             return Duration::from_millis(50);
         }
+        // Banner aktif: bangun 30 fps untuk animasi halus
+        if self.banner.as_ref().map(|(_, at)| at.elapsed().as_secs_f32() < 4.0).unwrap_or(false) {
+            return Duration::from_millis(32);
+        }
         // Maskot idle atau agent aktif butuh ~30 fps untuk breathing & gaze tracking
         if !self.media.active || self.agent.active {
             if let noktah_core::model::AgentStatus::AwaitingApproval(_) = self.agent.status {
@@ -321,7 +325,14 @@ impl eframe::App for Noktah {
         // pada lebar "sedang memutar dengan judul" — judul + artis lagu baru
         // terbaca, lalu menyusut sendiri.
         let peek = self.peek_until.map(|t| Instant::now() < t).unwrap_or(false);
-        self.pill.target = if peek {
+        let banner_active = self
+            .banner
+            .as_ref()
+            .map(|(_, at)| at.elapsed().as_secs_f32() < 4.0)
+            .unwrap_or(false);
+        self.pill.target = if banner_active {
+            340.0
+        } else if peek {
             self.settings.mini_width(true, true)
         } else if self.media.active {
             self.settings.mini_width(true, self.has_lyrics())
@@ -434,6 +445,7 @@ impl eframe::App for Noktah {
             // Sneak peek menahan pill melebar; setelah lewat, pill menyusut
             // lagi — itu masih gerak, jadi jangan tidur sebelum selesai.
             || peek
+            || banner_active
             || (self.mini_lyric_at.elapsed().as_secs_f32() < 0.35 && self.media.active);
         // Pemantau kursor memotong region jendela. Kalau ia tetap menunggu
         // 40 ms, tepi panel yang sedang membesar terpotong 2–3 frame. Selama
@@ -506,7 +518,12 @@ impl eframe::App for Noktah {
         }
 
         self.check_reminders(now_ms);
+        self.check_daily_reset();
+        self.check_water_reminder();
         self.flush_saves(now);
+        if self.banner.as_ref().map(|(_, at)| at.elapsed().as_secs_f32() >= 4.0).unwrap_or(false) {
+            self.banner = None;
+        }
 
         // Mode Penuh: tangkap layar sekali saat panel mulai membuka, selagi
         // jendela masih berupa pill kecil sehingga yang tertangkap hampir

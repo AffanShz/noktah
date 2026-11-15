@@ -449,6 +449,13 @@ impl Noktah {
                         reduce_motion: self.reduce_motion,
                         agent: &self.agent,
                         mascot: &self.mascot,
+                        banner: self.banner.as_ref().and_then(|(msg, at)| {
+                            if at.elapsed().as_secs_f32() < 4.0 {
+                                Some(msg.as_str())
+                            } else {
+                                None
+                            }
+                        }),
                     };
                     // Klip aura dilonggarkan 6 px ke bawah saja (rect tata
                     // letak tetap sama supaya isi baris tidak bergeser).
@@ -487,6 +494,44 @@ impl Noktah {
                     |ui| {
                         ui.multiply_opacity(alpha);
                         self.draw_notch_pages(ui, base_rect, outer_rect);
+
+                        // HUD Floating Toast Banner saat panel terbuka
+                        if let Some((ref banner_text, at)) = self.banner {
+                            let elapsed = at.elapsed().as_secs_f32();
+                            if elapsed < 4.0 {
+                                let banner_alpha = if elapsed < 0.25 {
+                                    (elapsed / 0.25).clamp(0.0, 1.0)
+                                } else if elapsed > 3.5 {
+                                    ((4.0 - elapsed) / 0.5).clamp(0.0, 1.0)
+                                } else {
+                                    1.0
+                                } * alpha;
+                                let toast_w = 320.0f32.min(outer_rect.width() - 40.0);
+                                let toast_h = 30.0;
+                                let toast_rect = Rect::from_center_size(
+                                    egui::pos2(outer_rect.center().x, outer_rect.bottom() - 24.0),
+                                    egui::vec2(toast_w, toast_h),
+                                );
+                                let p = ui.painter();
+                                p.rect_filled(
+                                    toast_rect,
+                                    Rounding::same(toast_h / 2.0),
+                                    Color32::from_rgba_unmultiplied(20, 21, 26, (245.0 * banner_alpha) as u8),
+                                );
+                                p.rect_stroke(
+                                    toast_rect,
+                                    Rounding::same(toast_h / 2.0),
+                                    Stroke::new(1.0, self.theme.accent.gamma_multiply(banner_alpha)),
+                                );
+                                p.text(
+                                    toast_rect.center(),
+                                    egui::Align2::CENTER_CENTER,
+                                    banner_text,
+                                    egui::FontId::proportional(11.5),
+                                    Color32::from_white_alpha((255.0 * banner_alpha) as u8),
+                                );
+                            }
+                        }
                         // Halaman digambar lewat `new_child`, yang tidak
                         // mengalokasikan ruang di UI induk. Tanpa baris ini
                         // `min_rect` Area menyusut jadi 0x0.

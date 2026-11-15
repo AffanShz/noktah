@@ -62,4 +62,35 @@ impl Noktah {
         }
         self.save_todos();
     }
+
+    pub(crate) fn check_daily_reset(&mut self) {
+        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+        let mut reset_occurred = false;
+        if self.water.check_daily_reset(&today) {
+            self.save_water();
+            reset_occurred = true;
+        }
+        if self.pomodoro.check_daily_reset(&today) {
+            self.save_pomodoro();
+            reset_occurred = true;
+        }
+        if reset_occurred {
+            self.banner = Some(("Hari baru! Progres harian direset.".to_string(), Instant::now()));
+        }
+    }
+
+    pub(crate) fn check_water_reminder(&mut self) {
+        // Ingatkan minum jika belum mencapai target dan sudah 1 jam sejak pengingat/minum terakhir
+        if self.water.progress() < 1.0
+            && self.last_water_reminder.elapsed() >= Duration::from_secs(3600)
+        {
+            let sisa = self.water.goal_ml.saturating_sub(self.water.taken_ml);
+            let msg = format!(
+                "Waktunya minum air! ({}/{} ml · sisa {} ml)",
+                self.water.taken_ml, self.water.goal_ml, sisa
+            );
+            self.banner = Some((msg, Instant::now()));
+            self.last_water_reminder = Instant::now();
+        }
+    }
 }

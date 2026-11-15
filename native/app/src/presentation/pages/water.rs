@@ -76,7 +76,13 @@ impl Noktah {
                             &theme,
                         ) {
                             self.water.drink();
+                            self.last_water_reminder = std::time::Instant::now();
                             self.save_water();
+                            let msg = format!(
+                                "Segar! +{} ml (Total: {}/{} ml)",
+                                bottle_ml, self.water.taken_ml, self.water.goal_ml
+                            );
+                            self.banner = Some((msg, std::time::Instant::now()));
                         }
 
                         ui.with_layout(
@@ -84,7 +90,12 @@ impl Noktah {
                             |ui| {
                                 if widgets::pill_button(ui, "Reset", false, &theme) {
                                     self.water.reset();
+                                    self.last_water_reminder = std::time::Instant::now();
                                     self.save_water();
+                                    self.banner = Some((
+                                        "Catatan hidrasi direset".to_string(),
+                                        std::time::Instant::now(),
+                                    ));
                                 }
                             },
                         );

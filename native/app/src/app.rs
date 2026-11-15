@@ -130,6 +130,7 @@ pub struct Noktah {
     pub levels: [f32; 4],
 
     pub banner: Option<(String, Instant)>,
+    pub last_water_reminder: Instant,
     pub(crate) save_at: Option<Instant>,
     pub lang: Lang,
     /// Buka jendela/screen setelan baru sekunder.
@@ -187,10 +188,12 @@ impl NotchPage {
     /// Music, Tasks, Pomodoro, System. Menekan chevron kanan dari Music
     /// melompati Focus dan mendarat di Tasks — terlihat seperti tombol yang
     /// mengacak urutan. Satu daftar, satu sumber kebenaran.
-    pub const SWITCHER: [NotchPage; 7] = [
+    pub const SWITCHER: [NotchPage; 9] = [
         NotchPage::Home,
         NotchPage::Music,
+        NotchPage::NowPlaying,
         NotchPage::Pomodoro,
+        NotchPage::Water,
         NotchPage::Tasks,
         NotchPage::System,
         NotchPage::Ask,
@@ -210,8 +213,9 @@ impl NotchPage {
     /// Halaman sebelumnya dalam siklus. Halaman sekunder kembali ke Music.
     pub fn prev(&self) -> Self {
         match self.switcher_index() {
-            Some(0) | None => NotchPage::Music,
+            Some(0) => Self::SWITCHER[Self::SWITCHER.len() - 1],
             Some(i) => Self::SWITCHER[i - 1],
+            None => NotchPage::Home,
         }
     }
 
@@ -219,7 +223,8 @@ impl NotchPage {
     pub fn next(&self) -> Self {
         match self.switcher_index() {
             Some(i) if i + 1 < Self::SWITCHER.len() => Self::SWITCHER[i + 1],
-            _ => NotchPage::Music,
+            Some(_) => Self::SWITCHER[0],
+            None => NotchPage::Home,
         }
     }
 
@@ -238,7 +243,7 @@ impl NotchPage {
             NotchPage::Tasks => icons::Icon::Tasks,
             NotchPage::Pomodoro => icons::Icon::Focus,
             NotchPage::System => icons::Icon::System,
-            NotchPage::NowPlaying => icons::Icon::Music,
+            NotchPage::NowPlaying => icons::Icon::PlayCircle,
             NotchPage::Water => icons::Icon::Water,
             NotchPage::Home => icons::Icon::Home,
             NotchPage::Ask => icons::Icon::AI,
@@ -361,6 +366,7 @@ impl Noktah {
             bands: crate::infrastructure::audio::spawn(ctx.clone()),
             levels: [0.0; 4],
             banner: None,
+            last_water_reminder: Instant::now() - std::time::Duration::from_secs(1800),
             save_at: None,
             lang,
             idle_since: None,
