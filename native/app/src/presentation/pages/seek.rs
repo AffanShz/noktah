@@ -2,10 +2,7 @@
 //!
 //! Dipindah dari `tabs.rs` tanpa perubahan perilaku. Satu halaman, satu berkas.
 
-use crate::app::{Noktah, NotchPage};
-use crate::presentation::{icons::Icon, style, widgets};
-use eframe::egui::{self, Color32, FontId, Id, Rect, Rounding, Sense, Stroke};
-use noktah_core::{format, i18n, model::PomodoroMode, model::Todo};
+use crate::app::Noktah;
 
 impl Noktah {
     /// Placeholder sampai lapisan SMTC tersedia.

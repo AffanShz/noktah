@@ -519,7 +519,6 @@ impl eframe::App for Noktah {
 
         self.check_reminders(now_ms);
         self.check_daily_reset();
-        self.check_water_reminder();
         self.flush_saves(now);
         if self.banner.as_ref().map(|(_, at)| at.elapsed().as_secs_f32() >= 4.0).unwrap_or(false) {
             self.banner = None;
