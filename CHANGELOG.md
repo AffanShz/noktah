@@ -3,6 +3,17 @@
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/),
 versi mengikuti [SemVer](https://semver.org/lang/id/).
 
+## [1.2.1] - 2026-11-16
+
+### Ditambahkan
+- **Integrasi Hook Antigravity (`agy` IDE/CLI)** — Dukungan event `PreInvocation`, `PostInvocation`, dan normalisasi payload `toolCall` pada `noktah-hook`, disertai tombol salin konfigurasi `hooks.json` di tab AI Assistant (Settings).
+- **Pembaca Kuota Lokal `agy-quota.json`** — Dukungan membaca snapshot kuota lokal dari direktori aplikasi atau `%APPDATA%\Noktah\agy-quota.json` sebelum fallback ke `9Router`.
+- **Toggle Visibilitas Navigasi Dock** — Pengaturan untuk menampilkan/menyembunyikan halaman dock (`nav_home`, `nav_music`, `nav_pomodoro`, `nav_tasks`, `nav_system`, `nav_ask`, `nav_agent`).
+
+### Diubah
+- **Label Status Agent Generik** — Judul halaman dan status bar/pill diubah dari `"Claude Code"` menjadi `"Agents status"` / `"Agent sedang memproses..."` / `"Agent Berpikir..."` agar netral lintas agen.
+- **Penyederhanaan Halaman Dock** — Menghapus modul `now_playing` dan `water` yang tidak lagi digunakan.
+
 ## [1.2.0] - 2026-11-15
 
 ### Ditambahkan
