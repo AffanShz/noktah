@@ -22,7 +22,7 @@ use crate::presentation::theme::Theme;
 use eframe::egui;
 use noktah_core::{
     i18n, lrc,
-    model::{ChatMessage, MediaState, PomodoroState, Todo, WaterState},
+    model::{ChatMessage, MediaState, PomodoroState, Todo},
     settings::{Lang, Settings},
 };
 use std::sync::atomic::Ordering;
@@ -65,7 +65,6 @@ pub struct Noktah {
 
     pub todos: Vec<Todo>,
     pub todo_input: String,
-    pub(crate) todo_due: String,
 
     pub media: MediaState,
     pub lyrics: Vec<lrc::LrcLine>,
@@ -90,7 +89,8 @@ pub struct Noktah {
     /// — dibedakan dari snapshot kosong, yang berarti "sudah dibaca, gagal".
     pub quota: Option<crate::infrastructure::quota::QuotaSnapshot>,
     pub quota_worker: crate::infrastructure::quota::QuotaHandle,
-    pub(crate) applied_glass: Option<noktah_core::settings::GlassEffect>,
+    pub updater: crate::infrastructure::updater::UpdaterHandle,
+    pub update_status: crate::infrastructure::updater::UpdateStatus,
     pub reduce_motion: bool,
     /// 0 = baris minimized biasa, 1 = garis tipis. Dianimasikan, bukan boolean,
     /// supaya transisi antar-lagu bisa mengecil lalu membesar kembali.
@@ -148,7 +148,6 @@ pub struct Noktah {
     /// Halaman aktif di notch (0: Music & Lyrics Split, 1: Tasks, 2: Pomodoro, 3: System).
     pub current_page: NotchPage,
     pub pomodoro: PomodoroState,
-    pub water: WaterState,
     pub is_charging: bool,
     pub battery_pct: u8,
     pub last_power_check: Instant,
@@ -167,17 +166,16 @@ pub struct Noktah {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum NotchPage {
-    Music = 0,
-    Tasks = 1,
+    Home = 0,
+    Music = 1,
     Pomodoro = 2,
-    System = 3,
-    NowPlaying = 4,
-    Water = 5,
-    Ask = 6,
-    Home = 7,
-    Agent = 8,
+    Tasks = 3,
+    System = 4,
+    Ask = 5,
+    Agent = 6,
 }
 
+#[allow(dead_code)]
 impl NotchPage {
     /// Halaman yang bisa dicapai lewat tombol chevron, **dalam urutan yang
     /// sama persis dengan ikon di bilah bawah**.
@@ -200,26 +198,26 @@ impl NotchPage {
     /// Jumlah halaman yang ikut siklus chevron.
     pub const COUNT: usize = Self::SWITCHER.len();
 
-    /// Posisi halaman di dalam `SWITCHER`. Halaman sekunder (NowPlaying,
-    /// Water) tidak ada di daftar; `None` membuat chevron memperlakukannya
-    /// sebagai "kembali ke Music".
+    /// Posisi halaman di dalam `SWITCHER`.
     fn switcher_index(&self) -> Option<usize> {
         Self::SWITCHER.iter().position(|p| p == self)
     }
 
-    /// Halaman sebelumnya dalam siklus. Halaman sekunder kembali ke Music.
+    /// Halaman sebelumnya dalam siklus (rotasi memutar).
     pub fn prev(&self) -> Self {
         match self.switcher_index() {
-            Some(0) | None => NotchPage::Music,
+            Some(0) => Self::SWITCHER[Self::SWITCHER.len() - 1],
             Some(i) => Self::SWITCHER[i - 1],
+            None => NotchPage::Home,
         }
     }
 
-    /// Halaman berikutnya dalam siklus. Halaman sekunder kembali ke Music.
+    /// Halaman berikutnya dalam siklus (rotasi memutar).
     pub fn next(&self) -> Self {
         match self.switcher_index() {
             Some(i) if i + 1 < Self::SWITCHER.len() => Self::SWITCHER[i + 1],
-            _ => NotchPage::Music,
+            Some(_) => Self::SWITCHER[0],
+            None => NotchPage::Home,
         }
     }
 
@@ -238,8 +236,6 @@ impl NotchPage {
             NotchPage::Tasks => icons::Icon::Tasks,
             NotchPage::Pomodoro => icons::Icon::Focus,
             NotchPage::System => icons::Icon::System,
-            NotchPage::NowPlaying => icons::Icon::Music,
-            NotchPage::Water => icons::Icon::Water,
             NotchPage::Home => icons::Icon::Home,
             NotchPage::Ask => icons::Icon::AI,
             NotchPage::Agent => icons::Icon::Bolt,
@@ -256,6 +252,66 @@ pub enum LyricsStatus {
 }
 
 impl Noktah {
+    /// Mengembalikan daftar halaman navigasi yang diaktifkan oleh pengguna di setelan.
+    /// Selalu menjamin minimal 1 halaman aktif (fallback ke Home).
+    pub fn active_nav_pages(&self) -> Vec<NotchPage> {
+        let mut pages = Vec::with_capacity(7);
+        if self.settings.nav_home {
+            pages.push(NotchPage::Home);
+        }
+        if self.settings.nav_music {
+            pages.push(NotchPage::Music);
+        }
+        if self.settings.nav_pomodoro {
+            pages.push(NotchPage::Pomodoro);
+        }
+        if self.settings.nav_tasks {
+            pages.push(NotchPage::Tasks);
+        }
+        if self.settings.nav_system {
+            pages.push(NotchPage::System);
+        }
+        if self.settings.nav_ask {
+            pages.push(NotchPage::Ask);
+        }
+        if self.settings.nav_agent {
+            pages.push(NotchPage::Agent);
+        }
+
+        if pages.is_empty() {
+            pages.push(NotchPage::Home);
+        }
+        pages
+    }
+
+    /// Halaman sebelumnya dalam siklus navigasi aktif.
+    pub fn prev_nav_page(&self) -> NotchPage {
+        let pages = self.active_nav_pages();
+        if let Some(pos) = pages.iter().position(|p| *p == self.current_page) {
+            if pos == 0 {
+                pages[pages.len() - 1]
+            } else {
+                pages[pos - 1]
+            }
+        } else {
+            pages[0]
+        }
+    }
+
+    /// Halaman berikutnya dalam siklus navigasi aktif.
+    pub fn next_nav_page(&self) -> NotchPage {
+        let pages = self.active_nav_pages();
+        if let Some(pos) = pages.iter().position(|p| *p == self.current_page) {
+            if pos + 1 < pages.len() {
+                pages[pos + 1]
+            } else {
+                pages[0]
+            }
+        } else {
+            pages[0]
+        }
+    }
+
     pub fn is_lyrics_synced(&self) -> bool {
         !self.lyrics.is_empty() && (self.lyrics_synced || self.lyrics.iter().any(|l| l.time >= 0.0))
     }
@@ -270,7 +326,6 @@ impl Noktah {
         let todos: Vec<Todo> = store::load("tasks.json");
         let chat: Vec<ChatMessage> = store::load("chat.json");
         let pomodoro: PomodoroState = store::load("pomodoro.json");
-        let water: WaterState = store::load("water.json");
         let (is_charging, battery_pct) = crate::infrastructure::os::power_status();
         let pill_w = settings.mini_width(false, false);
         let lyrics_enabled = settings.lyrics_enabled;
@@ -301,7 +356,6 @@ impl Noktah {
             dock_linger: Instant::now(),
             current_page: NotchPage::Music,
             pomodoro,
-            water,
             is_charging,
             battery_pct,
             last_power_check: Instant::now(),
@@ -310,7 +364,6 @@ impl Noktah {
             stats_at: Instant::now(),
             todos,
             todo_input: String::new(),
-            todo_due: String::new(),
             media: MediaState::default(),
             lyrics: Vec::new(),
             lyrics_synced: false,
@@ -332,7 +385,8 @@ impl Noktah {
             weather_city: String::new(),
             quota: None,
             quota_worker: crate::infrastructure::quota::spawn(ctx.clone()),
-            applied_glass: None,
+            updater: crate::infrastructure::updater::spawn(ctx.clone()),
+            update_status: crate::infrastructure::updater::UpdateStatus::Idle,
             reduce_motion: !crate::infrastructure::os::animations_enabled() && !force_anim,
             minimal_mix: Spring::from_spec(
                 if settings_minimal { 1.0 } else { 0.0 },

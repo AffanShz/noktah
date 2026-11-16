@@ -59,6 +59,10 @@ impl Noktah {
         if self.transisi_at.is_some() {
             return Duration::from_millis(50);
         }
+        // Banner aktif: bangun 30 fps untuk animasi halus
+        if self.banner.as_ref().map(|(_, at)| at.elapsed().as_secs_f32() < 4.0).unwrap_or(false) {
+            return Duration::from_millis(32);
+        }
         // Maskot idle atau agent aktif butuh ~30 fps untuk breathing & gaze tracking
         if !self.media.active || self.agent.active {
             if let noktah_core::model::AgentStatus::AwaitingApproval(_) = self.agent.status {
@@ -137,29 +141,6 @@ impl eframe::App for Noktah {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        if self.show_settings {
-            let mut close_settings = false;
-            ctx.show_viewport_immediate(
-                egui::ViewportId::from_hash_of("noktah_settings_window"),
-                egui::ViewportBuilder::default()
-                    .with_title("Noktah Settings")
-                    .with_inner_size([740.0, 520.0])
-                    .with_min_inner_size([640.0, 460.0])
-                    .with_decorations(true)
-                    .with_resizable(true)
-                    // Jendela setelan selalu di atas: begitu dibuka ia langsung
-                    // terlihat, tidak tertutup jendela lain atau notch sendiri.
-                    .with_always_on_top(),
-                |ctx, _class| {
-                    if self.draw_settings_window(ctx) {
-                        close_settings = true;
-                    }
-                },
-            );
-            if close_settings {
-                self.show_settings = false;
-            }
-        }
         if self.frames == 0 {
             let mut visuals = egui::Visuals::dark();
             // Background warna gelap elegan untuk input TextEdit (#1C1D22) agar batas kotaknya jelas di atas latar hitam
@@ -343,7 +324,14 @@ impl eframe::App for Noktah {
         // pada lebar "sedang memutar dengan judul" — judul + artis lagu baru
         // terbaca, lalu menyusut sendiri.
         let peek = self.peek_until.map(|t| Instant::now() < t).unwrap_or(false);
-        self.pill.target = if peek {
+        let banner_active = self
+            .banner
+            .as_ref()
+            .map(|(_, at)| at.elapsed().as_secs_f32() < 4.0)
+            .unwrap_or(false);
+        self.pill.target = if banner_active {
+            340.0
+        } else if peek {
             self.settings.mini_width(true, true)
         } else if self.media.active {
             self.settings.mini_width(true, self.has_lyrics())
@@ -456,6 +444,7 @@ impl eframe::App for Noktah {
             // Sneak peek menahan pill melebar; setelah lewat, pill menyusut
             // lagi — itu masih gerak, jadi jangan tidur sebelum selesai.
             || peek
+            || banner_active
             || (self.mini_lyric_at.elapsed().as_secs_f32() < 0.35 && self.media.active);
         // Pemantau kursor memotong region jendela. Kalau ia tetap menunggu
         // 40 ms, tepi panel yang sedang membesar terpotong 2–3 frame. Selama
@@ -498,6 +487,7 @@ impl eframe::App for Noktah {
         self.poll_weather();
         self.poll_quota();
         self.poll_ipc();
+        self.poll_updater();
 
         // Pembaruan fisika & ekspresi mascot Noki
         let (mx, my) = self.hover.get();
@@ -528,7 +518,11 @@ impl eframe::App for Noktah {
         }
 
         self.check_reminders(now_ms);
+        self.check_daily_reset();
         self.flush_saves(now);
+        if self.banner.as_ref().map(|(_, at)| at.elapsed().as_secs_f32() >= 4.0).unwrap_or(false) {
+            self.banner = None;
+        }
 
         // Mode Penuh: tangkap layar sekali saat panel mulai membuka, selagi
         // jendela masih berupa pill kecil sehingga yang tertangkap hampir
@@ -547,6 +541,32 @@ impl eframe::App for Noktah {
         let panel_alpha = ((self.open_h.pos - 0.20) / 0.65).clamp(0.0, 1.0);
         if panel_alpha > 0.01 {
             self.draw_panel(ctx, current_base, current_outer, panel_alpha);
+        }
+
+        // Secondary viewport (Settings) digambar setelah render shell & panel utama selesai,
+        // mencegah glitch putih akibat context Glow switch di awal frame.
+        if self.show_settings {
+            let mut close_settings = false;
+            ctx.show_viewport_immediate(
+                egui::ViewportId::from_hash_of("noktah_settings_window"),
+                egui::ViewportBuilder::default()
+                    .with_title("Noktah Settings")
+                    .with_inner_size([740.0, 520.0])
+                    .with_min_inner_size([640.0, 460.0])
+                    .with_decorations(true)
+                    .with_resizable(true)
+                    // Jendela setelan selalu di atas: begitu dibuka ia langsung
+                    // terlihat, tidak tertutup jendela lain atau notch sendiri.
+                    .with_always_on_top(),
+                |ctx, _class| {
+                    if self.draw_settings_window(ctx) {
+                        close_settings = true;
+                    }
+                },
+            );
+            if close_settings {
+                self.show_settings = false;
+            }
         }
 
         // --- hemat memori saat bentuk tertutup dan stabil (trim working set) -

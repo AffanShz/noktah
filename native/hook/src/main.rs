@@ -5,7 +5,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "console")]
 
 use std::ffi::c_void;
-use std::io::{stdin, stdout, Read, Write};
+use std::io::{stdin, stdout, IsTerminal, Read, Write};
 use windows::core::{HSTRING, PCWSTR, PWSTR};
 use windows::Win32::Foundation::{
     CloseHandle, GetLastError, LocalFree, ERROR_IO_PENDING, ERROR_PIPE_BUSY,
@@ -139,38 +139,191 @@ unsafe fn read_exact_overlapped(pipe: HANDLE, buf: &mut [u8], timeout_ms: u32) -
     res
 }
 
+fn print_help() {
+    println!(
+r#"noktah-hook v1.2.0 - Universal Mascot & Agent Hook for Noktah
+
+PENGGUNAAN:
+    noktah-hook [OPTIONS]
+    noktah-hook <STATUS> [TOOL_ATAU_PESAN]
+    <command> | noktah-hook [EVENT_NAME]   (Piped stdin JSON dari Claude Code / CI / script)
+
+STATUS / EVENT YANG DIDUKUNG:
+    working, tool, busy, build     Maskot hijau zamrud bergetar tekun mengeksekusi tool
+    thinking, prompt, query, plan  Maskot violet berpikir & melirik ke atas
+    done, completed, success       Maskot toska ceria tersenyum (^ ^) dengan semburan bintang
+    error, fail, failed            Maskot merah (#EF4444) menggelengkan kepala
+    idle, ready, reset             Maskot tenang bernapas mengikuti kursor
+    approval, permission, ask      Memicu modal persetujuan izin di notch Noktah
+
+OPSI:
+    -s, --status, -e, --event <EV> Nama status atau event
+    -t, --tool <NAMA>              Nama tool atau proses yang berjalan (misal: "cargo build")
+    -m, --message, --summary <MSG> Pesan, ringkasan, atau deskripsi
+    -p, --prompt <PROMPT>          Prompt tugas atau query
+    -i, --input <JSON_ATAU_TEKS>   Payload input tool (JSON atau teks biasa)
+    -d, --duration <MS>            Durasi pengerjaan dalam milidetik
+        --title <TITLE>            Judul sesi atau nama agent pemanggil
+    -h, --help                     Tampilkan panduan bantuan ini
+
+CONTOH PENGGUNAAN:
+    noktah-hook working "cargo test"
+    noktah-hook done "Seluruh 169 unit test lulus"
+    noktah-hook error "Kompilasi gagal di main.rs"
+    noktah-hook idle
+    noktah-hook --status working --tool "npm run build" --title "Frontend Build"
+    noktah-hook --status approval --tool "rm -rf" --input "target/"
+"#
+    );
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let event_arg = args.get(1).map(|s| s.as_str()).unwrap_or("");
+    let mut options_event: Option<String> = None;
+    let mut options_tool: Option<String> = None;
+    let mut options_message: Option<String> = None;
+    let mut options_prompt: Option<String> = None;
+    let mut options_input: Option<serde_json::Value> = None;
+    let mut options_duration: Option<u64> = None;
+    let mut options_title: Option<String> = None;
 
-    // 1. Baca input JSON dari stdin yang dikirim oleh Claude Code
-    let mut stdin_bytes = Vec::new();
-    let _ = stdin().read_to_end(&mut stdin_bytes);
-    if stdin_bytes.is_empty() {
-        std::process::exit(0);
+    let mut i = 1;
+    while i < args.len() {
+        let arg = &args[i];
+        match arg.as_str() {
+            "--help" | "-h" | "/?" => {
+                print_help();
+                return;
+            }
+            "--status" | "-s" | "--event" | "-e" => {
+                if i + 1 < args.len() {
+                    options_event = Some(args[i + 1].clone());
+                    i += 1;
+                }
+            }
+            "--tool" | "-t" => {
+                if i + 1 < args.len() {
+                    options_tool = Some(args[i + 1].clone());
+                    i += 1;
+                }
+            }
+            "--message" | "-m" | "--summary" => {
+                if i + 1 < args.len() {
+                    options_message = Some(args[i + 1].clone());
+                    i += 1;
+                }
+            }
+            "--prompt" | "-p" => {
+                if i + 1 < args.len() {
+                    options_prompt = Some(args[i + 1].clone());
+                    i += 1;
+                }
+            }
+            "--input" | "-i" => {
+                if i + 1 < args.len() {
+                    let val_str = &args[i + 1];
+                    let val = serde_json::from_str(val_str)
+                        .unwrap_or_else(|_| serde_json::Value::String(val_str.clone()));
+                    options_input = Some(val);
+                    i += 1;
+                }
+            }
+            "--duration" | "-d" => {
+                if i + 1 < args.len() {
+                    options_duration = args[i + 1].parse().ok();
+                    i += 1;
+                }
+            }
+            "--title" => {
+                if i + 1 < args.len() {
+                    options_title = Some(args[i + 1].clone());
+                    i += 1;
+                }
+            }
+            pos if !pos.starts_with('-') => {
+                if options_event.is_none() {
+                    options_event = Some(pos.to_string());
+                } else if options_tool.is_none() && options_message.is_none() && options_prompt.is_none() {
+                    let ev_lower = options_event.as_deref().unwrap_or("").to_lowercase();
+                    if matches!(ev_lower.as_str(), "working" | "tool" | "busy" | "run" | "running" | "build" | "pretooluse") {
+                        options_tool = Some(pos.to_string());
+                    } else if matches!(ev_lower.as_str(), "thinking" | "prompt" | "query" | "plan" | "userpromptsubmit") {
+                        options_prompt = Some(pos.to_string());
+                    } else {
+                        options_message = Some(pos.to_string());
+                    }
+                }
+            }
+            _ => {}
+        }
+        i += 1;
     }
 
-    // Jika event_name tidak ada di payload stdin, sisipkan dari argumen CLI
-    let mut payload: serde_json::Value = match serde_json::from_slice(&stdin_bytes) {
-        Ok(v) => v,
-        Err(_) => std::process::exit(0),
+    let is_stdin_piped = !stdin().is_terminal();
+    let mut payload: serde_json::Value = if is_stdin_piped {
+        let mut stdin_bytes = Vec::new();
+        let _ = stdin().read_to_end(&mut stdin_bytes);
+        if !stdin_bytes.is_empty() {
+            serde_json::from_slice(&stdin_bytes).unwrap_or_else(|_| serde_json::json!({}))
+        } else {
+            serde_json::json!({})
+        }
+    } else {
+        serde_json::json!({})
     };
 
-    if !event_arg.is_empty() && payload.get("hook_event_name").is_none() {
-        if let Some(obj) = payload.as_object_mut() {
-            obj.insert(
-                "hook_event_name".to_string(),
-                serde_json::Value::String(event_arg.to_string()),
-            );
+    // Jika berjalan interaktif di terminal tanpa stdin dan tanpa argumen, tampilkan bantuan
+    if !is_stdin_piped && options_event.is_none() {
+        print_help();
+        return;
+    }
+
+    // Gabungkan opsi CLI ke dalam payload JSON
+    if let Some(obj) = payload.as_object_mut() {
+        // Normalisasi format payload Antigravity (`toolCall: { name, args }`)
+        // ke field standar Noktah (`tool_name`, `tool_input`) jika belum ada.
+        if !obj.contains_key("tool_name") {
+            if let Some(tc) = obj.get("toolCall").and_then(|v| v.as_object()).cloned() {
+                if let Some(name) = tc.get("name").cloned() {
+                    obj.insert("tool_name".to_string(), name);
+                }
+                if !obj.contains_key("tool_input") {
+                    if let Some(args) = tc.get("args").cloned() {
+                        obj.insert("tool_input".to_string(), args);
+                    }
+                }
+            }
+        }
+
+        if let Some(ev) = options_event {
+            obj.insert("hook_event_name".to_string(), serde_json::Value::String(ev));
+        }
+        if let Some(tool) = options_tool {
+            obj.insert("tool_name".to_string(), serde_json::Value::String(tool));
+        }
+        if let Some(msg) = options_message {
+            obj.insert("last_assistant_message".to_string(), serde_json::Value::String(msg));
+        }
+        if let Some(prompt) = options_prompt {
+            obj.insert("prompt".to_string(), serde_json::Value::String(prompt));
+        }
+        if let Some(inp) = options_input {
+            obj.insert("tool_input".to_string(), inp);
+        }
+        if let Some(dur) = options_duration {
+            obj.insert("duration_ms".to_string(), serde_json::Value::from(dur));
+        }
+        if let Some(title) = options_title {
+            obj.insert("session_title".to_string(), serde_json::Value::String(title));
         }
     }
 
-    let is_permission_request = payload
+    let ev = payload
         .get("hook_event_name")
         .and_then(|v| v.as_str())
-        .map(|s| s == "PermissionRequest")
-        .unwrap_or(false)
-        || event_arg == "PermissionRequest";
+        .unwrap_or("")
+        .to_lowercase();
+    let is_permission_request = matches!(ev.as_str(), "permissionrequest" | "permission" | "approval" | "ask");
 
     let serialized_payload = match serde_json::to_vec(&payload) {
         Ok(v) => v,
@@ -180,7 +333,7 @@ fn main() {
     let pipe_name = get_user_pipe_name();
     let pipe_w = HSTRING::from(&pipe_name);
 
-    // 2. Hubungkan ke Named Pipe Noktah dengan mekanisme fail-fast
+    // 2. Hubungkan ke Named Pipe Noktah dengan fail-fast
     let mut handle = unsafe {
         CreateFileW(
             PCWSTR(pipe_w.as_ptr()),
@@ -212,7 +365,7 @@ fn main() {
         }
     }
 
-    // FAIL-SAFE: Jika Noktah tidak aktif / pipe tidak ditemukan, langsung silent exit 0 (fail-open)
+    // FAIL-SAFE: Jika Noktah tidak aktif / pipe tidak ditemukan, silent exit 0 (fail-open)
     let pipe = match handle {
         Ok(h) if !h.is_invalid() => h,
         _ => std::process::exit(0),
@@ -231,8 +384,8 @@ fn main() {
     }
 
     // 4. Baca Frame Jawaban:
-    // - Untuk event biasa: batas timeout 150ms (hanya menunggu ACK 0-byte)
-    // - Untuk PermissionRequest: batas timeout 110 detik (menunggu keputusan user di GUI Notch)
+    // - Untuk event biasa: timeout 150ms (hanya menunggu ACK 0-byte)
+    // - Untuk PermissionRequest: timeout 110 detik (menunggu keputusan user di GUI Notch)
     let timeout_ms = if is_permission_request { 110_000 } else { 150 };
 
     let mut resp_len_buf = [0u8; 4];

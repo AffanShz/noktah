@@ -189,18 +189,28 @@ impl MascotState {
         } else if let Some(cursor) = cursor_pos {
             // SEMUA MASCOT IKUTI KURSOR:
             // Baik saat idle, prompt, tool berjalan, awaiting approval, maupun selesai!
-            let dx = cursor.x - mascot_center.x;
-            let dy = cursor.y - mascot_center.y;
-            let dist = (dx * dx + dy * dy).sqrt().max(10.0);
-            let yaw = (dx / dist).clamp(-0.85, 0.85);
-            let pitch = (dy / dist).clamp(-0.75, 0.75);
-            (yaw, pitch)
+            let idle_duration = t - self.last_move_sec;
+            if idle_duration > 6.0 {
+                // Saat kursor diam > 6 detik tapi belum tidur (soft idle):
+                // Maskot Noki bernapas santai dan melirik halus secara organik
+                let wander_x = (t * 0.45).sin() * 0.22 + (t * 0.18).cos() * 0.08;
+                let wander_y = (t * 0.35).cos() * 0.12;
+                (wander_x, wander_y)
+            } else {
+                let dx = cursor.x - mascot_center.x;
+                let dy = cursor.y - mascot_center.y;
+                let dist = (dx * dx + dy * dy).sqrt().max(10.0);
+                let yaw = (dx / dist).clamp(-0.85, 0.85);
+                let pitch = (dy / dist).clamp(-0.75, 0.75);
+                (yaw, pitch)
+            }
         } else {
             match status {
                 AgentStatus::PromptSubmitted { .. } => (0.55, -0.45),
                 AgentStatus::ToolRunning { .. } => (((t * 3.5).sin() * 0.35), 0.40),
                 AgentStatus::AwaitingApproval(_) => (0.0, -0.15),
                 AgentStatus::Completed { .. } => (0.0, -0.30),
+                AgentStatus::Error { .. } => (0.0, 0.20),
                 _ => (((t * 0.6).sin() * 0.25), ((t * 0.4).cos() * 0.15)),
             }
         };
@@ -257,6 +267,7 @@ impl MascotState {
         // 6. Spawn Partikel Selebrasi atau Status
         let current_tag = match status {
             AgentStatus::Completed { .. } => "completed",
+            AgentStatus::Error { .. } => "error",
             AgentStatus::AwaitingApproval(_) => "approval",
             AgentStatus::ToolRunning { .. } => "tool",
             AgentStatus::PromptSubmitted { .. } => "thinking",
@@ -314,6 +325,11 @@ impl MascotState {
                     Color32::from_rgb(20, 184, 166), // Toska ceria selesai
                     Color32::from_rgb(45, 212, 191),
                     EyeStyle::Happy,
+                ),
+                AgentStatus::Error { .. } => (
+                    Color32::from_rgb(239, 68, 68), // Merah hangat (#EF4444)
+                    Color32::from_rgb(248, 113, 113),
+                    EyeStyle::Wide,
                 ),
                 AgentStatus::AwaitingApproval(_) => (
                     Color32::from_rgb(245, 158, 11), // Emas amber butuh izin
@@ -402,16 +418,11 @@ impl MascotRenderer {
             eye_style
         };
 
-        // Gaze tracking independen terhadap pusat mini mascot ini
+        // Gaze tracking halus ter-smooth lerp dari state
         let (mini_yaw, mini_pitch) = if state.dizzy_timer > 0.0 {
             ((t * 14.0).sin() * 0.85, (t * 8.0).cos() * 0.4)
         } else if state.is_sleeping {
             (0.0, 0.35)
-        } else if let Some(cursor) = state.last_cursor {
-            let dx = cursor.x - center.x;
-            let dy = cursor.y - center.y;
-            let dist = (dx * dx + dy * dy).sqrt().max(10.0);
-            ((dx / dist).clamp(-0.85, 0.85), (dy / dist).clamp(-0.75, 0.75))
         } else {
             (state.current_yaw, state.current_pitch)
         };
@@ -481,6 +492,9 @@ impl MascotRenderer {
 
         let jitter_x = if matches!(status, AgentStatus::ToolRunning { .. }) {
             (t * 28.0).sin() * 0.6
+        } else if matches!(status, AgentStatus::Error { .. }) {
+            // Menggelengkan kepala saat error
+            (t * 18.0).sin() * 2.4
         } else {
             0.0
         };
@@ -530,16 +544,11 @@ impl MascotRenderer {
             eye_style
         };
 
-        // Gaze tracking independen terhadap pusat card mascot ini
+        // Gaze tracking halus ter-smooth lerp dari state
         let (card_yaw, card_pitch) = if state.dizzy_timer > 0.0 {
             ((t * 14.0).sin() * 0.85, (t * 8.0).cos() * 0.4)
         } else if state.is_sleeping {
             (0.0, 0.35)
-        } else if let Some(cursor) = state.last_cursor {
-            let dx = cursor.x - center.x;
-            let dy = cursor.y - center.y;
-            let dist = (dx * dx + dy * dy).sqrt().max(10.0);
-            ((dx / dist).clamp(-0.85, 0.85), (dy / dist).clamp(-0.75, 0.75))
         } else {
             (state.current_yaw, state.current_pitch)
         };
@@ -888,6 +897,10 @@ mod tests {
             AgentStatus::Completed {
                 summary: "done".into(),
                 last_message: "ok".into(),
+                timestamp: 0,
+            },
+            AgentStatus::Error {
+                message: "err".into(),
                 timestamp: 0,
             },
         ];

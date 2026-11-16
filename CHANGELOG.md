@@ -3,6 +3,45 @@
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/),
 versi mengikuti [SemVer](https://semver.org/lang/id/).
 
+## [1.2.1] - 2026-11-16
+
+### Ditambahkan
+- **Integrasi Hook Antigravity (`agy` IDE/CLI)** — Dukungan event `PreInvocation`, `PostInvocation`, dan normalisasi payload `toolCall` pada `noktah-hook`, disertai tombol salin konfigurasi `hooks.json` di tab AI Assistant (Settings).
+- **Pembaca Kuota Lokal `agy-quota.json`** — Dukungan membaca snapshot kuota lokal dari direktori aplikasi atau `%APPDATA%\Noktah\agy-quota.json` sebelum fallback ke `9Router`.
+- **Toggle Visibilitas Navigasi Dock** — Pengaturan untuk menampilkan/menyembunyikan halaman dock (`nav_home`, `nav_music`, `nav_pomodoro`, `nav_tasks`, `nav_system`, `nav_ask`, `nav_agent`).
+
+### Diubah
+- **Label Status Agent Generik** — Judul halaman dan status bar/pill diubah dari `"Claude Code"` menjadi `"Agents status"` / `"Agent sedang memproses..."` / `"Agent Berpikir..."` agar netral lintas agen.
+- **Penyederhanaan Halaman Dock** — Menghapus modul `now_playing` dan `water` yang tidak lagi digunakan.
+
+## [1.2.0] - 2026-11-15
+
+### Ditambahkan
+- **In-App Update Checker** — Pemeriksa pembaruan otomatis terintegrasi GitHub Releases API di tab Tentang (Settings) dengan deteksi versi, catatan rilis (changelog), dan link download rilis langsung.
+- **HUD Banner Notch** — Notifikasi visual notch pill yang berekspansi mikro (340 px) saat sesi Pomodoro selesai atau pengingat hidrasi tiba, serta floating toast di dasar panel terbuka.
+- **Aktivasi Modul Water & NowPlaying di Switcher** — Siklus dock lengkap 9 halaman (Home, Music, NowPlaying, Pomodoro, Water, Tasks, System, Ask, Agent) dengan rotasi memutar dan ikon khusus.
+- **Background Ticker & Auto-Reset Harian Hidrasi** — Reset otomatis kuota air minum harian dan sesi Pomodoro di tengah malam kalender lokal, disertai pengingat hidrasi berkala.
+- **Pengaturan Durasi Pomodoro Dinamis** — Dukungan kustomisasi menit fokus dan istirahat pada slider pengaturan yang langsung tersinkronisasi ke timer aktif.
+- **Local Crash & Panic Logger** — Pencatatan panic hook otomatis ke berkas `%APPDATA%\Noktah\logs\crash.log`.
+
+### Diperbaiki
+- **Eliminasi Glitch Putih Secondary Viewport** — Pemindahan eksekusi render secondary viewport (Settings) ke akhir frame pass sehingga tidak memotong rendering Glow GL context notch utama.
+- **Polesan Gaze Tracking Maskot Noki saat Idle** — Integrasi lerp smoothing pada tatapan mata maskot di miniatur maupun kartu, serta penambahan wandering gaze organik saat kursor diam santai.
+- **Pembersihan Dead Fields & Personalisasi To-Do** — Penghapusan field compiler warning yang tak terpakai (`todo_due`, `applied_glass`) dan penyambungan nama pengguna `user_name` ke judul header dan salam tugas.
+
+## [1.1.0] - 2026-11-14
+
+### Ditambahkan
+- **Maskot Noki Interaktif & Universal Gaze Tracking** — Avatar superellipse ekspresif dengan pelacakan kursor global lintas aplikasi, respons dinamis terhadap musik/lirik, serta animasi squish, pusing (dizzy), kedip alami, dan tidur otomatis (>45 detik tidak aktif).
+- **Redesain Antarmuka Setelan** — Panel pengaturan modern berbasis secondary viewport native (*always-on-top*) dengan sidebar berkategori rapi (General, Display, Appearance, Music & Lyrics, Tasks, Pomodoro, AI Assistant, About).
+- **Fallback Multi-Provider Lirik** — Integrasi pencarian lirik tersinkronisasi lintas penyedia (LRCLIB, KuGou, NetEase) sebelum jatuh ke fallback lirik teks polos.
+
+### Diperbaiki
+- **Slot Lirik Dinamis Anti-Tabrakan** — Batas slot lirik di baris compact dihitung dinamis di antara komponen kiri dan kanan, dilengkapi pemotongan rapi (ellipsize) dan clipping agar teks lirik panjang tidak pernah menabrak maskot Noki maupun kontrol.
+- **Evaluasi Binary Search Lirik Polos** — Memperbaiki penanganan lirik tanpa timestamp (`time < 0.0`) agar tidak terkunci di baris terakhir dan tidak menarik scroll paksa ke dasar.
+- **Tampilan Status Claude Code di Compact Notch** — Pembersihan identifier panjang MCP (misal `mcp__terminal__...` disederhanakan) serta penataan layout agar label status agen tidak tumpang-tindih dengan avatar atau equalizer.
+- **Auto-Minimize Setelah Approval** — Panel notch otomatis menutup rapi setelah pengguna menekan tombol persetujuan izin pada halaman Agent, dilengkapi pencegahan stuck hover state.
+
 ## [1.0.0] - 2026-11-08
 
 Rilis pertama. Aplikasi ini adalah overlay notch untuk Windows 10/11 yang

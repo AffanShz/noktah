@@ -5,7 +5,7 @@
 //! palsunya di `crate::infrastructure::fake`. Itulah yang membuat use case
 //! bisa diuji tanpa disk, registry, atau jendela.
 
-use noktah_core::model::{ChatMessage, MediaState, PomodoroState, Todo, WaterState};
+use noktah_core::model::{ChatMessage, MediaState, PomodoroState, Todo};
 
 /* --------------------------------------------------------------- penyimpanan */
 
@@ -166,7 +166,6 @@ pub mod files {
     pub const TASKS: &str = "tasks.json";
     pub const CHAT: &str = "chat.json";
     pub const POMODORO: &str = "pomodoro.json";
-    pub const WATER: &str = "water.json";
 }
 
 /// Bentuk data yang disimpan, dikumpulkan supaya adapter penyimpanan tidak
@@ -177,5 +176,4 @@ pub struct Persisted {
     pub todos: Vec<Todo>,
     pub chat: Vec<ChatMessage>,
     pub pomodoro: PomodoroState,
-    pub water: WaterState,
 }

@@ -320,8 +320,6 @@ mod tests {
                 crate::app::NotchPage::Pomodoro,
                 crate::app::NotchPage::Tasks,
                 crate::app::NotchPage::System,
-                crate::app::NotchPage::NowPlaying,
-                crate::app::NotchPage::Water,
                 crate::app::NotchPage::Ask,
                 crate::app::NotchPage::Home,
                 crate::app::NotchPage::Agent,
@@ -370,10 +368,6 @@ mod tests {
                         crate::app::NotchPage::System => {
                             app.draw_page_system(&mut page_ui, content_rect)
                         }
-                        crate::app::NotchPage::NowPlaying => {
-                            app.draw_page_now_playing(&mut page_ui, content_rect)
-                        }
-                        crate::app::NotchPage::Water => app.draw_page_water(&mut page_ui, content_rect),
                         crate::app::NotchPage::Ask => app.draw_page_ai(&mut page_ui, content_rect),
                         crate::app::NotchPage::Home => {
                             app.draw_page_home(&mut page_ui, content_rect)
@@ -1129,5 +1123,38 @@ mod tests {
                 centers[i - 1]
             );
         }
+    }
+
+    #[test]
+    fn kustomisasi_menu_navigasi_mengikuti_setelan_dan_fallback() {
+        use crate::app::{Noktah, NotchPage};
+        let ctx = egui::Context::default();
+        let hover = crate::infrastructure::platform::Hover::new(false);
+        let mut app = Noktah::new("test".to_string(), hover, &ctx);
+
+        // Default 7 halaman aktif
+        let default_pages = app.active_nav_pages();
+        assert_eq!(default_pages.len(), 7);
+
+        // Matikan beberapa halaman (Music & Pomodoro)
+        app.settings.nav_music = false;
+        app.settings.nav_pomodoro = false;
+        let filtered = app.active_nav_pages();
+        assert_eq!(filtered.len(), 5);
+        assert!(!filtered.contains(&NotchPage::Music));
+        assert!(!filtered.contains(&NotchPage::Pomodoro));
+
+        // Uji rotasi prev/next hanya di halaman aktif
+        app.current_page = NotchPage::Home;
+        assert_eq!(app.next_nav_page(), NotchPage::Tasks);
+
+        // Fallback jika semua halaman dimatikan (menjamin minimal Home)
+        app.settings.nav_home = false;
+        app.settings.nav_tasks = false;
+        app.settings.nav_system = false;
+        app.settings.nav_ask = false;
+        app.settings.nav_agent = false;
+        let empty_fallback = app.active_nav_pages();
+        assert_eq!(empty_fallback, vec![NotchPage::Home]);
     }
 }

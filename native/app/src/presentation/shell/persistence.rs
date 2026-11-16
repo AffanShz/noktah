@@ -30,10 +30,6 @@ impl Noktah {
         store::save("chat.json", &self.chat);
     }
 
-    pub fn save_water(&mut self) {
-        store::save("water.json", &self.water);
-    }
-
     pub fn save_pomodoro(&mut self) {
         store::save("pomodoro.json", &self.pomodoro);
     }
@@ -61,5 +57,17 @@ impl Noktah {
             }
         }
         self.save_todos();
+    }
+
+    pub(crate) fn check_daily_reset(&mut self) {
+        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+        let mut reset_occurred = false;
+        if self.pomodoro.check_daily_reset(&today) {
+            self.save_pomodoro();
+            reset_occurred = true;
+        }
+        if reset_occurred {
+            self.banner = Some(("Hari baru! Progres harian direset.".to_string(), Instant::now()));
+        }
     }
 }

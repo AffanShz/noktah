@@ -286,6 +286,21 @@ pub struct Settings {
     /// Durasi pomodoro dalam menit.
     pub focus_minutes: u32,
     pub break_minutes: u32,
+    // Navigasi dock: halaman mana yang tampil di menu navigasi.
+    #[serde(default = "default_true")]
+    pub nav_home: bool,
+    #[serde(default = "default_true")]
+    pub nav_music: bool,
+    #[serde(default = "default_true")]
+    pub nav_pomodoro: bool,
+    #[serde(default = "default_true")]
+    pub nav_tasks: bool,
+    #[serde(default = "default_true")]
+    pub nav_system: bool,
+    #[serde(default = "default_true")]
+    pub nav_ask: bool,
+    #[serde(default = "default_true")]
+    pub nav_agent: bool,
 }
 
 impl Default for Settings {
@@ -328,6 +343,13 @@ impl Default for Settings {
             start_with_windows: false,
             focus_minutes: 25,
             break_minutes: 5,
+            nav_home: true,
+            nav_music: true,
+            nav_pomodoro: true,
+            nav_tasks: true,
+            nav_system: true,
+            nav_ask: true,
+            nav_agent: true,
         }
     }
 }

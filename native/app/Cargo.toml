@@ -1,6 +1,6 @@
 [package]
 name = "noktah-native"
-version = "1.0.0"
+version = "1.2.1"
 edition = "2021"
 
 [build-dependencies]
@@ -13,7 +13,7 @@ egui = "0.29"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-ureq = { version = "3.5", features = ["json"] }
+ureq = { version = "2.10", features = ["json"] }
 # Hanya untuk membaca db 9Router (mode read-only). Fitur `bundled` supaya
 # Noktah tetap satu exe tanpa sqlite3.dll di sampingnya.
 rusqlite = { version = "0.32", features = ["bundled"] }

@@ -28,7 +28,7 @@ mod tests {
     }
 
     fn available_for(page: &str) -> f32 {
-        if page == "Music" || page == "NowPlaying" {
+        if page == "Music" {
             layout::CONTENT_BOTTOM - style::S2
         } else {
             body_height()
@@ -36,22 +36,17 @@ mod tests {
     }
 
     /// Kebutuhan vertikal minimum tiap halaman, mengikuti angka kompak baru.
-    fn page_needs() -> [(&'static str, f32); 7] {
+    fn page_needs() -> [(&'static str, f32); 5] {
         let art = 44.0; // `.art` sampul halaman Musik
         let scrubber = 12.0;
         let transport = 36.0; // `.ib.play` tombol terbesar
-        let ring = 76.0; // `.ring` dan cincin Water/Focus
+        let ring = 76.0; // `.ring` dan cincin Focus
         let input = 32.0; // `.field`
         let tile = 64.0; // kartu sistem (tiga tile sejajar)
 
         [
             ("Music", art + style::S1 + scrubber + style::S1 + transport),
-            (
-                "NowPlaying",
-                art + style::S1 + scrubber + style::S1 + transport,
-            ),
             ("Tasks", input + style::S1 + 30.0),
-            ("Water", ring),
             ("Focus", ring),
             ("System", tile),
             ("Ask", input),

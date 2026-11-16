@@ -19,24 +19,26 @@ impl Noktah {
     pub fn draw_notch_pages(&mut self, ui: &mut egui::Ui, base_rect: Rect, shell_rect: Rect) {
         let theme = self.theme;
 
-        // Urutan tombol datang dari `NotchPage::SWITCHER` — sumber yang sama
-        // yang dipakai `prev()`/`next()`, jadi dock dan chevron tidak pernah
-        // berbeda pendapat soal urutan.
-        let halaman: Vec<(NotchPage, Icon, &str)> = NotchPage::SWITCHER
-            .iter()
+        let active_pages = self.active_nav_pages();
+        if !active_pages.contains(&self.current_page) {
+            self.current_page = active_pages[0];
+        }
+
+        // Urutan tombol datang dari `self.active_nav_pages()` — disesuaikan
+        // dengan pilihan pengguna di setelan, menjaga konsistensi antara dock dan chevron.
+        let halaman: Vec<(NotchPage, Icon, &str)> = active_pages
+            .into_iter()
             .map(|p| {
                 let label = match p {
+                    NotchPage::Home => "Home",
                     NotchPage::Music => "Music",
                     NotchPage::Pomodoro => "Focus",
                     NotchPage::Tasks => "Tasks",
                     NotchPage::System => "System",
                     NotchPage::Ask => "Ask",
-                    NotchPage::NowPlaying => "Now Playing",
-                    NotchPage::Water => "Water",
-                    NotchPage::Home => "Home",
                     NotchPage::Agent => "Agent",
                 };
-                (*p, p.icon(), label)
+                (p, p.icon(), label)
             })
             .collect();
 
@@ -69,8 +71,6 @@ impl Noktah {
             NotchPage::Tasks => self.draw_page_todo(&mut page_ui, content_rect),
             NotchPage::Pomodoro => self.draw_page_pomodoro(&mut page_ui, content_rect),
             NotchPage::System => self.draw_page_system(&mut page_ui, content_rect),
-            NotchPage::NowPlaying => self.draw_page_now_playing(&mut page_ui, content_rect),
-            NotchPage::Water => self.draw_page_water(&mut page_ui, content_rect),
             NotchPage::Home => self.draw_page_home(&mut page_ui, content_rect),
             NotchPage::Ask => self.draw_page_ai(&mut page_ui, content_rect),
             NotchPage::Agent => self.draw_page_agent(&mut page_ui, content_rect),
@@ -279,9 +279,9 @@ impl Noktah {
             );
             if resp.clicked() {
                 self.current_page = if prev {
-                    self.current_page.prev()
+                    self.prev_nav_page()
                 } else {
-                    self.current_page.next()
+                    self.next_nav_page()
                 };
             }
         }

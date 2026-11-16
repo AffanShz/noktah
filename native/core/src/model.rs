@@ -134,6 +134,14 @@ impl PomodoroMode {
         }
     }
 
+    pub fn duration_secs_custom(&self, focus_m: u32, break_m: u32) -> u32 {
+        match self {
+            PomodoroMode::Focus => focus_m.max(1) * 60,
+            PomodoroMode::ShortBreak => break_m.max(1) * 60,
+            PomodoroMode::LongBreak => (break_m * 3).max(15) * 60,
+        }
+    }
+
     pub fn label(&self) -> &'static str {
         match self {
             PomodoroMode::Focus => "Fokus",
@@ -150,6 +158,8 @@ pub struct PomodoroState {
     pub running: bool,
     pub remaining_secs: u32,
     pub sessions_today: u32,
+    #[serde(default)]
+    pub last_date: String,
 }
 
 impl Default for PomodoroState {
@@ -159,6 +169,7 @@ impl Default for PomodoroState {
             running: false,
             remaining_secs: 25 * 60,
             sessions_today: 0,
+            last_date: String::new(),
         }
     }
 }
@@ -170,6 +181,12 @@ impl PomodoroState {
         self.remaining_secs = mode.duration_secs();
     }
 
+    pub fn set_mode_with(&mut self, mode: PomodoroMode, focus_m: u32, break_m: u32) {
+        self.mode = mode;
+        self.running = false;
+        self.remaining_secs = mode.duration_secs_custom(focus_m, break_m);
+    }
+
     pub fn toggle_run(&mut self) {
         self.running = !self.running;
     }
@@ -177,6 +194,11 @@ impl PomodoroState {
     pub fn reset(&mut self) {
         self.running = false;
         self.remaining_secs = self.mode.duration_secs();
+    }
+
+    pub fn reset_with(&mut self, focus_m: u32, break_m: u32) {
+        self.running = false;
+        self.remaining_secs = self.mode.duration_secs_custom(focus_m, break_m);
     }
 
     pub fn tick(&mut self) -> bool {
@@ -192,6 +214,20 @@ impl PomodoroState {
         }
         false
     }
+
+    /// Reset counter sesi harian saat tanggal kalender berganti.
+    pub fn check_daily_reset(&mut self, today: &str) -> bool {
+        if !self.last_date.is_empty() && self.last_date != today {
+            self.sessions_today = 0;
+            self.last_date = today.to_string();
+            true
+        } else if self.last_date.is_empty() {
+            self.last_date = today.to_string();
+            false
+        } else {
+            false
+        }
+    }
 }
 
 /// Keadaan pengingat hidrasi. Semua volume dalam mililiter.
@@ -200,6 +236,8 @@ pub struct WaterState {
     pub goal_ml: u32,
     pub taken_ml: u32,
     pub bottle_ml: u32,
+    #[serde(default)]
+    pub last_date: String,
 }
 
 impl Default for WaterState {
@@ -208,6 +246,7 @@ impl Default for WaterState {
             goal_ml: 2000,
             taken_ml: 0,
             bottle_ml: 250,
+            last_date: String::new(),
         }
     }
 }
@@ -220,6 +259,20 @@ impl WaterState {
 
     pub fn reset(&mut self) {
         self.taken_ml = 0;
+    }
+
+    /// Reset catatan minum harian saat tanggal kalender berganti.
+    pub fn check_daily_reset(&mut self, today: &str) -> bool {
+        if !self.last_date.is_empty() && self.last_date != today {
+            self.taken_ml = 0;
+            self.last_date = today.to_string();
+            true
+        } else if self.last_date.is_empty() {
+            self.last_date = today.to_string();
+            false
+        } else {
+            false
+        }
     }
 
     /// 0.0–1.0 untuk cincin progres. Target 0 tidak boleh membagi nol.
@@ -276,6 +329,10 @@ pub enum AgentStatus {
     Completed {
         summary: String,
         last_message: String,
+        timestamp: i64,
+    },
+    Error {
+        message: String,
         timestamp: i64,
     },
 }
@@ -462,6 +519,14 @@ mod tests {
         let back: AgentStatus = serde_json::from_str(&raw).unwrap();
         assert_eq!(status, back);
 
+        let err_status = AgentStatus::Error {
+            message: "Build failed".into(),
+            timestamp: 123456789,
+        };
+        let err_raw = serde_json::to_string(&err_status).unwrap();
+        let err_back: AgentStatus = serde_json::from_str(&err_raw).unwrap();
+        assert_eq!(err_status, err_back);
+
         let decision = PermissionDecision {
             behavior: "allow".into(),
             message: None,
@@ -470,5 +535,58 @@ mod tests {
         let dec_raw = serde_json::to_string(&decision).unwrap();
         assert!(dec_raw.contains("\"behavior\":\"allow\""));
         assert!(!dec_raw.contains("message"));
+    }
+
+    #[test]
+    fn pomodoro_durasi_kustom_dan_reset_with() {
+        let mut p = PomodoroState::default();
+        assert_eq!(p.remaining_secs, 25 * 60);
+
+        p.set_mode_with(PomodoroMode::Focus, 50, 10);
+        assert_eq!(p.remaining_secs, 50 * 60);
+
+        p.set_mode_with(PomodoroMode::ShortBreak, 50, 10);
+        assert_eq!(p.remaining_secs, 10 * 60);
+
+        p.set_mode_with(PomodoroMode::LongBreak, 50, 10);
+        assert_eq!(p.remaining_secs, 30 * 60); // 10 * 3 = 30 min
+
+        p.toggle_run();
+        p.tick();
+        assert_eq!(p.remaining_secs, 30 * 60 - 1);
+        p.reset_with(50, 10);
+        assert_eq!(p.remaining_secs, 30 * 60);
+        assert!(!p.running);
+    }
+
+    #[test]
+    fn reset_harian_otomatis_hidrasi_dan_pomodoro() {
+        let mut w = WaterState::default();
+        w.drink();
+        w.drink();
+        assert_eq!(w.taken_ml, 500);
+
+        // Hari pertama diinisialisasi
+        assert!(!w.check_daily_reset("2026-11-15"));
+        assert_eq!(w.taken_ml, 500);
+
+        // Hari sama tidak mereset
+        assert!(!w.check_daily_reset("2026-11-15"));
+        assert_eq!(w.taken_ml, 500);
+
+        // Hari baru (2026-11-16) mereset kuota air ke 0
+        assert!(w.check_daily_reset("2026-11-16"));
+        assert_eq!(w.taken_ml, 0);
+        assert_eq!(w.last_date, "2026-11-16");
+
+        let mut p = PomodoroState::default();
+        p.sessions_today = 4;
+        assert!(!p.check_daily_reset("2026-11-15"));
+        assert_eq!(p.sessions_today, 4);
+
+        // Hari baru mereset sessions_today ke 0
+        assert!(p.check_daily_reset("2026-11-16"));
+        assert_eq!(p.sessions_today, 0);
+        assert_eq!(p.last_date, "2026-11-16");
     }
 }

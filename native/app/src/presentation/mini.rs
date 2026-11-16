@@ -39,6 +39,7 @@ pub struct MiniCtx<'a> {
     pub reduce_motion: bool,
     pub agent: &'a noktah_core::model::AgentState,
     pub mascot: &'a crate::presentation::mascot::MascotState,
+    pub banner: Option<&'a str>,
 }
 
 const PAD: f32 = 20.0;
@@ -192,10 +193,13 @@ pub(crate) fn format_agent_status_label(
         }
         noktah_core::model::AgentStatus::ToolRunning { tool, .. } => {
             let clean = clean_tool_name(tool);
-            format!("Claude: {clean}")
+            format!("Agent: {clean}")
         }
         noktah_core::model::AgentStatus::PromptSubmitted { .. } => {
-            "Claude Berpikir...".to_string()
+            "Agent Berpikir...".to_string()
+        }
+        noktah_core::model::AgentStatus::Error { message, .. } => {
+            format!("Error: {}", clean_tool_name(message))
         }
         _ => clock.to_string(),
     }
@@ -210,7 +214,9 @@ fn draw_minimal_pill(painter: &Painter, rect: Rect, ctx: &MiniCtx) {
     let theme = ctx.theme;
     let cy = rect.center().y;
 
-    let center_label = if ctx.agent.active {
+    let center_label = if let Some(banner) = ctx.banner {
+        banner.to_string()
+    } else if ctx.agent.active {
         format_agent_status_label(&ctx.agent.status, &ctx.clock)
     } else {
         ctx.clock.clone()
@@ -263,14 +269,19 @@ fn draw_minimal_pill(painter: &Painter, rect: Rect, ctx: &MiniCtx) {
     let font = FontId::proportional(12.0);
 
     if max_w > 10.0 {
-        let display_text = ellipsize(painter, &center_label, &font, theme.ink, max_w)
+        let text_color = if ctx.banner.is_some() {
+            theme.accent
+        } else {
+            theme.ink
+        };
+        let display_text = ellipsize(painter, &center_label, &font, text_color, max_w)
             .unwrap_or_else(|| center_label.clone());
         painter.with_clip_rect(label_rect).text(
             label_rect.center(),
             egui::Align2::CENTER_CENTER,
             &display_text,
             font,
-            theme.ink,
+            text_color,
         );
     }
 
@@ -284,8 +295,8 @@ pub fn draw(painter: &Painter, rect: Rect, ctx: &MiniCtx) {
     let theme = ctx.theme;
     let cy = rect.center().y;
 
-    // Tanpa lagu: jam, daya, dan waveform 
-    if !ctx.media.active {
+    // Jika ada banner HUD aktif atau tanpa lagu: tampilkan pill minimal / HUD banner
+    if ctx.banner.is_some() || !ctx.media.active {
         draw_minimal_pill(painter, rect, ctx);
         return;
     }
@@ -948,6 +959,14 @@ fn agent_aura(painter: &Painter, rect: Rect, ctx: &MiniCtx) {
                 with_alpha(blend, 210.0 * pulse * alpha),
             );
         }
+        noktah_core::model::AgentStatus::Error { .. } => {
+            let red = Color32::from_rgb(239, 68, 68);
+            painter.rect_filled(
+                jalur,
+                egui::Rounding::same(2.0),
+                with_alpha(red, 180.0 * alpha),
+            );
+        }
         _ => {}
     }
 }
@@ -1003,13 +1022,13 @@ mod tests {
             input: serde_json::Value::Null,
             start_time: 0,
         };
-        assert_eq!(format_agent_status_label(&status_tool, clock), "Claude: read_terminal");
+        assert_eq!(format_agent_status_label(&status_tool, clock), "Agent: read_terminal");
 
         let status_think = noktah_core::model::AgentStatus::PromptSubmitted {
             prompt: "buatkan rencana".to_string(),
             timestamp: 0,
         };
-        assert_eq!(format_agent_status_label(&status_think, clock), "Claude Berpikir...");
+        assert_eq!(format_agent_status_label(&status_think, clock), "Agent Berpikir...");
 
         let status_appr = noktah_core::model::AgentStatus::AwaitingApproval(noktah_core::model::PermissionRequest {
             request_id: "1".to_string(),

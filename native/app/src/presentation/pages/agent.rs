@@ -71,7 +71,7 @@ impl Noktah {
                 );
                 ui.add_space(18.0);
                 ui.label(
-                    egui::RichText::new("Claude Code")
+                    egui::RichText::new("Agents status")
                         .font(FontId::proportional(12.5))
                         .strong()
                         .color(theme.ink),
@@ -217,7 +217,7 @@ impl Noktah {
                                     .color(theme.ink),
                             );
                             ui.label(
-                                egui::RichText::new("Claude sedang memproses...")
+                                egui::RichText::new("Agent sedang memproses...")
                                     .font(FontId::proportional(10.0))
                                     .color(theme.dim),
                             );
@@ -233,6 +233,19 @@ impl Noktah {
                                 egui::RichText::new("Jawaban lengkap tersedia di bawah (dapat di-scroll)")
                                     .font(FontId::proportional(10.0))
                                     .color(theme.dim),
+                            );
+                        }
+                        AgentStatus::Error { message, .. } => {
+                            ui.label(
+                                egui::RichText::new("Error / Gagal")
+                                    .font(FontId::proportional(11.5))
+                                    .strong()
+                                    .color(Color32::from_rgb(239, 68, 68)),
+                            );
+                            ui.label(
+                                egui::RichText::new(message)
+                                    .font(FontId::proportional(10.0))
+                                    .color(Color32::from_rgb(248, 113, 113)),
                             );
                         }
                         AgentStatus::Subagents(subs) => {
@@ -397,6 +410,27 @@ impl Noktah {
                                     });
                             }
                         }
+                        AgentStatus::Error { message, .. } => {
+                            Frame::none()
+                                .fill(Color32::from_rgba_unmultiplied(36, 16, 16, 180))
+                                .rounding(Rounding::same(8.0))
+                                .stroke(Stroke::new(1.0, Color32::from_rgb(239, 68, 68)))
+                                .inner_margin(Margin::same(8.0))
+                                .show(ui, |ui| {
+                                    ui.label(
+                                        egui::RichText::new("DETAIL KESALAHAN:")
+                                            .font(FontId::monospace(9.5))
+                                            .strong()
+                                            .color(Color32::from_rgb(239, 68, 68)),
+                                    );
+                                    ui.add_space(2.0);
+                                    ui.label(
+                                        egui::RichText::new(message)
+                                            .font(FontId::monospace(10.5))
+                                            .color(Color32::from_rgb(254, 202, 202)),
+                                    );
+                                });
+                        }
                         AgentStatus::Subagents(subs) => {
                             for s in subs {
                                 ui.label(
@@ -408,7 +442,7 @@ impl Noktah {
                         }
                         AgentStatus::Idle => {
                             ui.label(
-                                egui::RichText::new("Menunggu perintah CLI Claude Code...")
+                                egui::RichText::new("Menunggu perintah agent atau CLI hook...")
                                     .font(FontId::proportional(10.5))
                                     .color(theme.faint),
                             );

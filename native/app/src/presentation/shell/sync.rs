@@ -282,24 +282,53 @@ impl Noktah {
                         self.agent.permission_mode = mode;
                     }
 
-                    match payload.hook_event_name.as_str() {
-                        "SessionStart" => {
+                    let ev_clean = payload.hook_event_name.trim().to_lowercase();
+                    if matches!(
+                        ev_clean.as_str(),
+                        "sessionstart"
+                            | "start"
+                            | "preinvocation"
+                            | "postinvocation"
+                            | "stop"
+                            | "done"
+                            | "completed"
+                            | "finish"
+                            | "finished"
+                            | "success"
+                    ) {
+                        self.refresh_quota();
+                    }
+                    match ev_clean.as_str() {
+                        "sessionstart" | "start" | "idle" | "ready" | "reset" => {
                             self.agent.active = true;
                             self.agent.status = noktah_core::model::AgentStatus::Idle;
                             self.agent.logs.push("[Session Started]".into());
                         }
-                        "UserPromptSubmit" => {
+                        "userpromptsubmit" | "preinvocation" | "prompt" | "query" | "thinking" | "plan" | "planning" | "request" => {
                             self.agent.active = true;
-                            let prompt = payload.prompt.unwrap_or_default();
-                            self.agent.logs.push(format!("> {}", prompt));
+                            let prompt = payload.prompt.or(payload.last_assistant_message).unwrap_or_default();
+                            if !prompt.is_empty() {
+                                self.agent.logs.push(format!("> {}", prompt));
+                            }
                             self.agent.status = noktah_core::model::AgentStatus::PromptSubmitted {
-                                prompt,
+                                prompt: if prompt.is_empty() {
+                                    "Thinking...".into()
+                                } else {
+                                    prompt
+                                },
                                 timestamp: now,
                             };
                         }
-                        "PreToolUse" => {
+                        "postinvocation" => {
                             self.agent.active = true;
-                            let tool = payload.tool_name.unwrap_or_else(|| "Tool".into());
+                            self.agent.status = noktah_core::model::AgentStatus::PromptSubmitted {
+                                prompt: "Processing response...".into(),
+                                timestamp: now,
+                            };
+                        }
+                        "pretooluse" | "tool" | "working" | "busy" | "run" | "running" | "build" | "building" | "executing" | "work" => {
+                            self.agent.active = true;
+                            let tool = payload.tool_name.or(payload.prompt).unwrap_or_else(|| "Tool".into());
                             let input = payload.tool_input.unwrap_or_default();
                             self.agent.status = noktah_core::model::AgentStatus::ToolRunning {
                                 tool,
@@ -307,7 +336,7 @@ impl Noktah {
                                 start_time: now,
                             };
                         }
-                        "PostToolUse" => {
+                        "posttooluse" | "tool_done" | "tool_finish" | "tool_completed" => {
                             self.agent.active = true;
                             let dur = payload.duration_ms.unwrap_or(0);
                             let tool = payload.tool_name.unwrap_or_default();
@@ -317,7 +346,7 @@ impl Noktah {
                                 timestamp: now,
                             };
                         }
-                        "SubagentStart" => {
+                        "subagentstart" | "subagent_start" | "spawn" => {
                             self.agent.active = true;
                             if let (Some(id), Some(typ)) = (payload.agent_id, payload.agent_type) {
                                 self.agent.subagents.push(noktah_core::model::SubagentInfo {
@@ -330,7 +359,7 @@ impl Noktah {
                                 );
                             }
                         }
-                        "SubagentStop" => {
+                        "subagentstop" | "subagent_stop" => {
                             self.agent.active = true;
                             if let Some(id) = payload.agent_id {
                                 self.agent.subagents.retain(|s| s.agent_id != id);
@@ -346,12 +375,24 @@ impl Noktah {
                                 }
                             }
                         }
-                        "Stop" => {
+                        "stop" | "done" | "completed" | "finish" | "finished" | "success" => {
                             self.agent.active = true;
-                            let last_msg = payload.last_assistant_message.unwrap_or_default();
+                            let last_msg = payload.last_assistant_message.or(payload.prompt).unwrap_or_default();
                             self.agent.status = noktah_core::model::AgentStatus::Completed {
-                                summary: "Turn finished".into(),
+                                summary: "Task finished".into(),
                                 last_message: last_msg,
+                                timestamp: now,
+                            };
+                        }
+                        "error" | "fail" | "failed" | "crash" | "panic" | "exception" => {
+                            self.agent.active = true;
+                            let msg = payload.last_assistant_message
+                                .or(payload.prompt)
+                                .or(payload.tool_name)
+                                .unwrap_or_else(|| "Error occurred".into());
+                            self.agent.logs.push(format!("✖ Error: {}", msg));
+                            self.agent.status = noktah_core::model::AgentStatus::Error {
+                                message: msg,
                                 timestamp: now,
                             };
                         }
@@ -396,6 +437,12 @@ impl Noktah {
                     }
                 }
             }
+        }
+    }
+
+    pub(crate) fn poll_updater(&mut self) {
+        while let Ok(st) = self.updater.rx.try_recv() {
+            self.update_status = st;
         }
     }
 }
