@@ -210,6 +210,7 @@ impl MascotState {
                 AgentStatus::ToolRunning { .. } => (((t * 3.5).sin() * 0.35), 0.40),
                 AgentStatus::AwaitingApproval(_) => (0.0, -0.15),
                 AgentStatus::Completed { .. } => (0.0, -0.30),
+                AgentStatus::Error { .. } => (0.0, 0.20),
                 _ => (((t * 0.6).sin() * 0.25), ((t * 0.4).cos() * 0.15)),
             }
         };
@@ -266,6 +267,7 @@ impl MascotState {
         // 6. Spawn Partikel Selebrasi atau Status
         let current_tag = match status {
             AgentStatus::Completed { .. } => "completed",
+            AgentStatus::Error { .. } => "error",
             AgentStatus::AwaitingApproval(_) => "approval",
             AgentStatus::ToolRunning { .. } => "tool",
             AgentStatus::PromptSubmitted { .. } => "thinking",
@@ -323,6 +325,11 @@ impl MascotState {
                     Color32::from_rgb(20, 184, 166), // Toska ceria selesai
                     Color32::from_rgb(45, 212, 191),
                     EyeStyle::Happy,
+                ),
+                AgentStatus::Error { .. } => (
+                    Color32::from_rgb(239, 68, 68), // Merah hangat (#EF4444)
+                    Color32::from_rgb(248, 113, 113),
+                    EyeStyle::Wide,
                 ),
                 AgentStatus::AwaitingApproval(_) => (
                     Color32::from_rgb(245, 158, 11), // Emas amber butuh izin
@@ -485,6 +492,9 @@ impl MascotRenderer {
 
         let jitter_x = if matches!(status, AgentStatus::ToolRunning { .. }) {
             (t * 28.0).sin() * 0.6
+        } else if matches!(status, AgentStatus::Error { .. }) {
+            // Menggelengkan kepala saat error
+            (t * 18.0).sin() * 2.4
         } else {
             0.0
         };
@@ -887,6 +897,10 @@ mod tests {
             AgentStatus::Completed {
                 summary: "done".into(),
                 last_message: "ok".into(),
+                timestamp: 0,
+            },
+            AgentStatus::Error {
+                message: "err".into(),
                 timestamp: 0,
             },
         ];

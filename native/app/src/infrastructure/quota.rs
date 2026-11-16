@@ -398,9 +398,98 @@ pub fn fetch() -> QuotaSnapshot {
     fetch_partial()
 }
 
+/* ----------------------------------------------------- file status lokal */
+
+#[derive(Deserialize)]
+struct LocalQuotaWindow {
+    remaining_pct: f64,
+    #[serde(default)]
+    reset_ms: Option<i64>,
+    #[serde(default)]
+    reset_at: Option<String>,
+}
+
+impl LocalQuotaWindow {
+    fn to_window(&self) -> Option<Window> {
+        if !self.remaining_pct.is_finite() {
+            return None;
+        }
+        let sisa = (self.remaining_pct / 100.0).clamp(0.0, 1.0) as f32;
+        let reset_ms = self
+            .reset_ms
+            .filter(|&ms| ms > 0)
+            .unwrap_or_else(|| reset_to_ms(self.reset_at.as_ref()));
+        Some(Window { sisa, reset_ms })
+    }
+}
+
+#[derive(Deserialize)]
+struct LocalQuotaFile {
+    #[serde(default)]
+    session: Option<LocalQuotaWindow>,
+    #[serde(default)]
+    weekly: Option<LocalQuotaWindow>,
+    #[serde(default)]
+    updated_at_ms: Option<i64>,
+}
+
+fn local_quota_paths() -> Vec<PathBuf> {
+    let mut paths = Vec::with_capacity(2);
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            paths.push(dir.join("agy-quota.json"));
+        }
+    }
+    paths.push(crate::infrastructure::store::data_dir().join("agy-quota.json"));
+    paths
+}
+
+fn parse_local_quota_json(raw: &str, fallback_at_ms: i64) -> Option<QuotaSnapshot> {
+    let parsed: LocalQuotaFile = serde_json::from_str(raw).ok()?;
+    let session = parsed.session.as_ref().and_then(LocalQuotaWindow::to_window);
+    let weekly = parsed.weekly.as_ref().and_then(LocalQuotaWindow::to_window);
+    if session.is_none() && weekly.is_none() {
+        return None;
+    }
+    let at_ms = parsed
+        .updated_at_ms
+        .filter(|&ms| ms > 0)
+        .unwrap_or(fallback_at_ms);
+    Some(QuotaSnapshot {
+        session,
+        weekly,
+        akun_ok: 1,
+        akun_total: 1,
+        error_key: None,
+        at_ms,
+    })
+}
+
+fn read_local_quota_file() -> Option<QuotaSnapshot> {
+    for path in local_quota_paths() {
+        let Ok(raw) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let mtime_ms = std::fs::metadata(&path)
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| d.as_millis() as i64)
+            .unwrap_or_else(|| chrono::Local::now().timestamp_millis());
+        if let Some(snap) = parse_local_quota_json(&raw, mtime_ms) {
+            return Some(snap);
+        }
+    }
+    None
+}
+
 /// Satu pembacaan penuh. Setiap jalur keluar mengisi `at_ms` supaya UI bisa
 /// menilai kesegaran angka.
 fn fetch_partial() -> QuotaSnapshot {
+    if let Some(local) = read_local_quota_file() {
+        return local;
+    }
+
     let Some(dir) = data_dir() else {
         return QuotaSnapshot {
             error_key: Some("home.quota.err.none"),
@@ -745,6 +834,29 @@ mod tests {
 
         let a = akun_dari_respons(&resp);
         assert!((a.minggu.unwrap().sisa - 0.50).abs() < 1e-6);
+    }
+
+    #[test]
+    fn parse_local_quota_json_reads_windows_and_timestamps() {
+        let raw = r#"{
+            "session": { "remaining_pct": 85.0, "reset_ms": 1763300000000 },
+            "weekly": { "remaining_pct": 62.5, "reset_at": "2026-11-20T00:00:00Z" },
+            "updated_at_ms": 1763290000000
+        }"#;
+        let snap = parse_local_quota_json(raw, 1234).expect("valid local quota json");
+        assert!((snap.session.unwrap().sisa - 0.85).abs() < 1e-6);
+        assert_eq!(snap.session.unwrap().reset_ms, 1763300000000);
+        assert!((snap.weekly.unwrap().sisa - 0.625).abs() < 1e-6);
+        assert!(snap.weekly.unwrap().reset_ms > 0);
+        assert_eq!(snap.at_ms, 1763290000000);
+        assert_eq!(snap.akun_ok, 1);
+        assert_eq!(snap.akun_total, 1);
+    }
+
+    #[test]
+    fn parse_local_quota_json_ignores_empty_payload() {
+        assert!(parse_local_quota_json("{}", 1234).is_none());
+        assert!(parse_local_quota_json("not json", 1234).is_none());
     }
 }
 

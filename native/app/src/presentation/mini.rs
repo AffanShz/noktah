@@ -193,10 +193,13 @@ pub(crate) fn format_agent_status_label(
         }
         noktah_core::model::AgentStatus::ToolRunning { tool, .. } => {
             let clean = clean_tool_name(tool);
-            format!("Claude: {clean}")
+            format!("Agent: {clean}")
         }
         noktah_core::model::AgentStatus::PromptSubmitted { .. } => {
-            "Claude Berpikir...".to_string()
+            "Agent Berpikir...".to_string()
+        }
+        noktah_core::model::AgentStatus::Error { message, .. } => {
+            format!("Error: {}", clean_tool_name(message))
         }
         _ => clock.to_string(),
     }
@@ -956,6 +959,14 @@ fn agent_aura(painter: &Painter, rect: Rect, ctx: &MiniCtx) {
                 with_alpha(blend, 210.0 * pulse * alpha),
             );
         }
+        noktah_core::model::AgentStatus::Error { .. } => {
+            let red = Color32::from_rgb(239, 68, 68);
+            painter.rect_filled(
+                jalur,
+                egui::Rounding::same(2.0),
+                with_alpha(red, 180.0 * alpha),
+            );
+        }
         _ => {}
     }
 }
@@ -1011,13 +1022,13 @@ mod tests {
             input: serde_json::Value::Null,
             start_time: 0,
         };
-        assert_eq!(format_agent_status_label(&status_tool, clock), "Claude: read_terminal");
+        assert_eq!(format_agent_status_label(&status_tool, clock), "Agent: read_terminal");
 
         let status_think = noktah_core::model::AgentStatus::PromptSubmitted {
             prompt: "buatkan rencana".to_string(),
             timestamp: 0,
         };
-        assert_eq!(format_agent_status_label(&status_think, clock), "Claude Berpikir...");
+        assert_eq!(format_agent_status_label(&status_think, clock), "Agent Berpikir...");
 
         let status_appr = noktah_core::model::AgentStatus::AwaitingApproval(noktah_core::model::PermissionRequest {
             request_id: "1".to_string(),

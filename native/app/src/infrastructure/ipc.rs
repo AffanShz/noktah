@@ -247,7 +247,8 @@ fn handle_client_connection(
         }
     };
 
-    if hook_payload.hook_event_name == "PermissionRequest" {
+    let ev_lower = hook_payload.hook_event_name.trim().to_lowercase();
+    if ev_lower == "permissionrequest" || ev_lower == "permission" || ev_lower == "approval" || ev_lower == "ask" {
         let (resp_tx, resp_rx) = sync_channel::<PermissionDecision>(1);
         let request_id = hook_payload
             .tool_use_id

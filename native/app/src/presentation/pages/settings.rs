@@ -4,10 +4,10 @@
 //! Appearance (colors, glass effect), Music (lyrics, pill), Tasks (todo reminders),
 //! Pomodoro (focus settings), AI (provider, model), About (version).
 
-use crate::app::{Noktah, NotchPage, SettingsTab};
-use crate::presentation::{icons::Icon, style, theme::Theme, widgets};
-use eframe::egui::{self, Color32, Id, Rect, Rounding, Sense, Stroke};
-use noktah_core::{format, i18n, model::PomodoroMode, model::Todo};
+use crate::app::{Noktah, SettingsTab};
+use crate::presentation::{style, theme::Theme, widgets};
+use eframe::egui::{self, Color32};
+use noktah_core::{i18n, model::PomodoroMode};
 
 impl Noktah {
     pub(crate) fn draw_settings_tab_content(&mut self, ui: &mut egui::Ui) {
@@ -128,6 +128,93 @@ impl Noktah {
                     self.touch_settings();
                 }
             });
+        });
+
+        widgets::section(ui, "Navigation Menu", &theme);
+        widgets::card_group(ui, |ui| {
+            widgets::row_desc(
+                ui,
+                "Home",
+                "Tampilkan halaman Dashboard di menu navigasi",
+                &theme,
+                |ui| {
+                    if widgets::toggle(ui, &mut self.settings.nav_home, &theme) {
+                        self.touch_settings();
+                    }
+                },
+            );
+            widgets::card_divider(ui);
+            widgets::row_desc(
+                ui,
+                "Music",
+                "Tampilkan pemutar musik & lirik di menu navigasi",
+                &theme,
+                |ui| {
+                    if widgets::toggle(ui, &mut self.settings.nav_music, &theme) {
+                        self.touch_settings();
+                    }
+                },
+            );
+            widgets::card_divider(ui);
+            widgets::row_desc(
+                ui,
+                "Focus (Pomodoro)",
+                "Tampilkan timer fokus Pomodoro di menu navigasi",
+                &theme,
+                |ui| {
+                    if widgets::toggle(ui, &mut self.settings.nav_pomodoro, &theme) {
+                        self.touch_settings();
+                    }
+                },
+            );
+            widgets::card_divider(ui);
+            widgets::row_desc(
+                ui,
+                "Tasks",
+                "Tampilkan daftar tugas to-do di menu navigasi",
+                &theme,
+                |ui| {
+                    if widgets::toggle(ui, &mut self.settings.nav_tasks, &theme) {
+                        self.touch_settings();
+                    }
+                },
+            );
+            widgets::card_divider(ui);
+            widgets::row_desc(
+                ui,
+                "System",
+                "Tampilkan monitor sistem CPU & RAM di menu navigasi",
+                &theme,
+                |ui| {
+                    if widgets::toggle(ui, &mut self.settings.nav_system, &theme) {
+                        self.touch_settings();
+                    }
+                },
+            );
+            widgets::card_divider(ui);
+            widgets::row_desc(
+                ui,
+                "Ask (AI)",
+                "Tampilkan obrolan AI di menu navigasi",
+                &theme,
+                |ui| {
+                    if widgets::toggle(ui, &mut self.settings.nav_ask, &theme) {
+                        self.touch_settings();
+                    }
+                },
+            );
+            widgets::card_divider(ui);
+            widgets::row_desc(
+                ui,
+                "Agent",
+                "Tampilkan agen Claude Code di menu navigasi",
+                &theme,
+                |ui| {
+                    if widgets::toggle(ui, &mut self.settings.nav_agent, &theme) {
+                        self.touch_settings();
+                    }
+                },
+            );
         });
     }
 
@@ -512,9 +599,19 @@ impl Noktah {
         });
     }
 
-    /// Tab 6: AI — provider, model, API key
+    /// Tab 6: AI — provider, model, API key & Mascot Hooks
     fn draw_ai_tab(&mut self, ui: &mut egui::Ui, lang: noktah_core::settings::Lang, theme: Theme) {
-        widgets::section(ui, "AI Model Configuration", &theme);
+        let is_id = lang == noktah_core::settings::Lang::Id;
+
+        widgets::section(
+            ui,
+            if is_id {
+                "Konfigurasi Model AI"
+            } else {
+                "AI Model Configuration"
+            },
+            &theme,
+        );
         widgets::card_group(ui, |ui| {
             widgets::row(ui, i18n::t(lang, "settings.provider"), &theme, |ui| {
                 egui::ComboBox::from_id_salt("penyedia")
@@ -539,6 +636,227 @@ impl Noktah {
                 {
                     self.touch_settings();
                 }
+            });
+        });
+
+        widgets::section(
+            ui,
+            if is_id {
+                "Integrasi Maskot & Agent Hooks (Noki)"
+            } else {
+                "Mascot & Agent Hooks (Noki)"
+            },
+            &theme,
+        );
+        widgets::card_group(ui, |ui| {
+            ui.label(style::text(
+                if is_id {
+                    "Sinkronkan Aktivitas AI Agent ke Maskot"
+                } else {
+                    "Sync AI Agent Activity with Mascot"
+                },
+                theme.ink,
+            ));
+            ui.label(style::cap(
+                if is_id {
+                    "Noki akan otomatis berekspresi saat Claude Code, Antigravity, atau skrip CLI bekerja, berpikir, selesai, atau error."
+                } else {
+                    "Noki automatically reacts when Claude Code, Antigravity, or CLI scripts work, think, finish, or error."
+                },
+                theme.faint,
+            ));
+
+            widgets::card_divider(ui);
+
+            widgets::row_desc(
+                ui,
+                if is_id {
+                    "Prompt Hook Claude Code"
+                } else {
+                    "Claude Code Hook Prompt"
+                },
+                if is_id {
+                    "Prompt instruksi otomatis untuk dipaste ke Claude Code"
+                } else {
+                    "Ready-to-use prompt for Claude Code chat"
+                },
+                &theme,
+                |ui| {
+                    if widgets::chip_button(
+                        ui,
+                        if is_id {
+                            "Salin Prompt"
+                        } else {
+                            "Copy Prompt"
+                        },
+                        false,
+                        &theme,
+                    ) {
+                        ui.output_mut(|o| o.copied_text = PROMPT_CLAUDE_CODE_HOOKS.to_string());
+                        self.banner = Some((
+                            if is_id {
+                                "Prompt hook Claude Code disalin ke clipboard!".into()
+                            } else {
+                                "Claude Code hook prompt copied!".into()
+                            },
+                            std::time::Instant::now(),
+                        ));
+                    }
+                },
+            );
+
+            widgets::card_divider(ui);
+
+            widgets::row_desc(
+                ui,
+                if is_id {
+                    "Konfigurasi JSON Hooks"
+                } else {
+                    "Hooks JSON Configuration"
+                },
+                if is_id {
+                    "Snippet JSON untuk settings.json Claude Code"
+                } else {
+                    "Raw JSON snippet for settings.json"
+                },
+                &theme,
+                |ui| {
+                    if widgets::chip_button(
+                        ui,
+                        if is_id {
+                            "Salin JSON"
+                        } else {
+                            "Copy JSON"
+                        },
+                        false,
+                        &theme,
+                    ) {
+                        ui.output_mut(|o| o.copied_text = JSON_CLAUDE_CODE_HOOKS.to_string());
+                        self.banner = Some((
+                            if is_id {
+                                "Konfigurasi JSON hooks disalin ke clipboard!".into()
+                            } else {
+                                "Hooks JSON snippet copied!".into()
+                            },
+                            std::time::Instant::now(),
+                        ));
+                    }
+                },
+            );
+
+            widgets::card_divider(ui);
+
+            widgets::row_desc(
+                ui,
+                if is_id {
+                    "Antigravity (hooks.json)"
+                } else {
+                    "Antigravity (hooks.json)"
+                },
+                if is_id {
+                    "Hubungkan agy IDE/CLI ke maskot & refresh agy-quota.json"
+                } else {
+                    "Connect agy IDE/CLI to mascot & refresh agy-quota.json"
+                },
+                &theme,
+                |ui| {
+                    if widgets::chip_button(
+                        ui,
+                        if is_id {
+                            "Salin hooks.json"
+                        } else {
+                            "Copy hooks.json"
+                        },
+                        false,
+                        &theme,
+                    ) {
+                        ui.output_mut(|o| o.copied_text = JSON_ANTIGRAVITY_HOOKS.to_string());
+                        self.banner = Some((
+                            if is_id {
+                                "Konfigurasi hooks.json Antigravity disalin!".into()
+                            } else {
+                                "Antigravity hooks.json copied!".into()
+                            },
+                            std::time::Instant::now(),
+                        ));
+                    }
+                },
+            );
+
+            widgets::card_divider(ui);
+
+            widgets::row_desc(
+                ui,
+                if is_id {
+                    "Panduan CLI Universal"
+                } else {
+                    "Universal CLI Guide"
+                },
+                if is_id {
+                    "Perintah noktah-hook untuk skrip terminal / CI"
+                } else {
+                    "noktah-hook commands for terminal scripts"
+                },
+                &theme,
+                |ui| {
+                    if widgets::chip_button(
+                        ui,
+                        if is_id {
+                            "Salin Panduan"
+                        } else {
+                            "Copy Guide"
+                        },
+                        false,
+                        &theme,
+                    ) {
+                        ui.output_mut(|o| o.copied_text = GUIDE_CLI_HOOKS.to_string());
+                        self.banner = Some((
+                            if is_id {
+                                "Panduan CLI universal disalin ke clipboard!".into()
+                            } else {
+                                "Universal CLI guide copied!".into()
+                            },
+                            std::time::Instant::now(),
+                        ));
+                    }
+                },
+            );
+
+            widgets::card_divider(ui);
+
+            ui.vertical(|ui| {
+                ui.label(style::cap(
+                    if is_id {
+                        "💡 Langkah Cepat Menghubungkan Noki:"
+                    } else {
+                        "💡 Quick Setup Steps:"
+                    },
+                    theme.ink,
+                ));
+                ui.label(style::cap(
+                    if is_id {
+                        "1. Pastikan biner `noktah-hook.exe` ada di PATH sistem."
+                    } else {
+                        "1. Ensure `noktah-hook.exe` is added to system PATH."
+                    },
+                    theme.faint,
+                ));
+                ui.label(style::cap(
+                    if is_id {
+                        "2. Claude Code: Salin Prompt lalu tempel ke chat Claude untuk instalasi hook otomatis."
+                    } else {
+                        "2. Claude Code: Copy Prompt and paste into Claude chat for automated hook setup."
+                    },
+                    theme.faint,
+                ));
+                ui.label(style::cap(
+                    if is_id {
+                        "3. CLI / Terminal: Panggil `noktah-hook working \"tugas\"` dan `noktah-hook done`."
+                    } else {
+                        "3. CLI / Terminal: Call `noktah-hook working \"task\"` and `noktah-hook done`."
+                    },
+                    theme.faint,
+                ));
             });
         });
     }
@@ -657,3 +975,198 @@ impl Noktah {
         self.draw_settings_tab_content(ui);
     }
 }
+
+const PROMPT_CLAUDE_CODE_HOOKS: &str = r#"Pasang hook Noktah ke konfigurasi Claude Code agar maskot Noki dapat merespons aktivitas agent secara real-time.
+
+Tambahkan hooks berikut ke konfigurasi Claude Code (settings.json):
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "noktah-hook.exe SessionStart"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "noktah-hook.exe UserPromptSubmit"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "noktah-hook.exe PreToolUse"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "noktah-hook.exe PostToolUse"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "noktah-hook.exe Stop"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "noktah-hook.exe PermissionRequest"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+Catatan: Pastikan `noktah-hook.exe` sudah tersedia di PATH lingkungan sistem Anda."#;
+
+const JSON_CLAUDE_CODE_HOOKS: &str = r#"{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "noktah-hook.exe SessionStart"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "noktah-hook.exe UserPromptSubmit"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "noktah-hook.exe PreToolUse"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "noktah-hook.exe PostToolUse"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "noktah-hook.exe Stop"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "noktah-hook.exe PermissionRequest"
+          }
+        ]
+      }
+    ]
+  }
+}"#;
+
+const GUIDE_CLI_HOOKS: &str = r#"# Panduan Penggunaan noktah-hook (Universal CLI)
+
+Pastikan aplikasi Noktah sedang berjalan.
+
+1. Mengirim status saat mulai bekerja / menjalankan perintah:
+   noktah-hook working "Menjalankan cargo test"
+   noktah-hook -s working -m "Membangun proyek"
+
+2. Mengirim status saat tugas selesai sukses:
+   noktah-hook done "Semua tes lulus"
+   noktah-hook -s done -m "Build sukses"
+
+3. Mengirim status saat terjadi kesalahan / kegagalan:
+   noktah-hook error "Kompilasi gagal pada modul X"
+   noktah-hook -s error -m "Test failed"
+
+4. Mengembalikan maskot ke status menganggur (idle):
+   noktah-hook idle
+   noktah-hook -s idle
+
+5. Mengirim status persetujuan / konfirmasi:
+   noktah-hook -s approval -m "Menunggu konfirmasi pengguna"
+
+6. Mode stdin pipe (membaca output perintah lain):
+   cargo check | noktah-hook -s working -m "Memeriksa kode"
+"#;
+
+const JSON_ANTIGRAVITY_HOOKS: &str = r#"{
+  "noktah-mascot": {
+    "SessionStart": [
+      { "type": "command", "command": "noktah-hook.exe SessionStart" }
+    ],
+    "PreInvocation": [
+      { "type": "command", "command": "noktah-hook.exe PreInvocation" }
+    ],
+    "PostInvocation": [
+      { "type": "command", "command": "noktah-hook.exe PostInvocation" }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          { "type": "command", "command": "noktah-hook.exe PreToolUse" }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          { "type": "command", "command": "noktah-hook.exe PostToolUse" }
+        ]
+      }
+    ],
+    "Stop": [
+      { "type": "command", "command": "noktah-hook.exe Stop" }
+    ]
+  }
+}"#;

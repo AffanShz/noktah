@@ -331,6 +331,10 @@ pub enum AgentStatus {
         last_message: String,
         timestamp: i64,
     },
+    Error {
+        message: String,
+        timestamp: i64,
+    },
 }
 
 impl AgentStatus {
@@ -514,6 +518,14 @@ mod tests {
         let raw = serde_json::to_string(&status).unwrap();
         let back: AgentStatus = serde_json::from_str(&raw).unwrap();
         assert_eq!(status, back);
+
+        let err_status = AgentStatus::Error {
+            message: "Build failed".into(),
+            timestamp: 123456789,
+        };
+        let err_raw = serde_json::to_string(&err_status).unwrap();
+        let err_back: AgentStatus = serde_json::from_str(&err_raw).unwrap();
+        assert_eq!(err_status, err_back);
 
         let decision = PermissionDecision {
             behavior: "allow".into(),
