@@ -38,6 +38,14 @@ impl Noktah {
             && !self.lyric_anim_pos.settled()
     }
 
+    pub(crate) fn mascot_visible(&self) -> bool {
+        let open_agent = self.open.pos > 0.2 && self.current_page == NotchPage::Agent;
+        let mini_mascot = self.open.pos <= 0.2
+            && self.settings.mini_agent
+            && self.minimal_mix.pos < 0.95;
+        open_agent || mini_mascot
+    }
+
     /// Selisih waktu sampai repaint berikutnya yang berguna.
     ///
     /// Selama bentuk masih bergerak, hasilnya nol: frame berikutnya diminta
@@ -63,11 +71,12 @@ impl Noktah {
         if self.banner.as_ref().map(|(_, at)| at.elapsed().as_secs_f32() < 4.0).unwrap_or(false) {
             return Duration::from_millis(32);
         }
-        // Maskot idle atau agent aktif butuh ~30 fps untuk breathing & gaze tracking
-        if !self.media.active || self.agent.active {
-            if let noktah_core::model::AgentStatus::AwaitingApproval(_) = self.agent.status {
-                return Duration::from_millis(16); // 60fps untuk bouncy mascot hop
-            }
+        // Maskot idle atau agent aktif butuh ~30 fps untuk breathing & gaze tracking,
+        // namun hanya saat maskot terlihat atau saat menunggu persetujuan izin.
+        if let noktah_core::model::AgentStatus::AwaitingApproval(_) = self.agent.status {
+            return Duration::from_millis(16); // 60fps untuk bouncy mascot hop
+        }
+        if self.mascot_visible() && (!self.media.active || self.agent.active) {
             if let noktah_core::model::AgentStatus::ToolRunning { .. } = self.agent.status {
                 return Duration::from_millis(32); // 30fps untuk animasi komet & timer
             }
@@ -76,7 +85,9 @@ impl Noktah {
             }
             return Duration::from_millis(32); // 30fps untuk breathing & gaze tracking mascot
         }
-        if self.mascot.dizzy_timer > 0.0 || !self.mascot.squish.settled() {
+        if (self.mascot_visible() || self.agent.active)
+            && (self.mascot.dizzy_timer > 0.0 || !self.mascot.squish.settled())
+        {
             return Duration::from_millis(16);
         }
         if self.open.pos > 0.5 {
@@ -193,8 +204,8 @@ impl eframe::App for Noktah {
             self.last_pomodoro_tick = now;
             if self.pomodoro.tick() {
                 let msg = match self.pomodoro.mode {
-                    PomodoroMode::Focus => "Sesi fokus selesai! Waktunya istirahat.",
-                    _ => "Waktu istirahat selesai! Siap untuk kembali fokus?",
+                    PomodoroMode::Focus => self.tr("focus.done_work"),
+                    _ => self.tr("focus.done_break"),
                 };
                 self.banner = Some((msg.to_string(), Instant::now()));
                 self.save_pomodoro();
@@ -461,7 +472,11 @@ impl eframe::App for Noktah {
             };
 
         // --- data -------------------------------------------------------
-        if now.duration_since(self.stats_at) > Duration::from_secs(1) {
+        let sys_needed = (self.open.pos > 0.2 && self.current_page == NotchPage::System)
+            || (self.open.pos <= 0.5
+                && self.minimal_mix.pos < 0.95
+                && (self.settings.mini_cpu || self.settings.mini_ram));
+        if sys_needed && now.duration_since(self.stats_at) > Duration::from_secs(1) {
             self.sys.tick();
             self.stats_at = now;
         }
@@ -490,23 +505,29 @@ impl eframe::App for Noktah {
         self.poll_updater();
 
         // Pembaruan fisika & ekspresi mascot Noki
-        let (mx, my) = self.hover.get();
-        let cursor_pos = Some(egui::pos2(mx, my));
-        let is_minimized = self.open.pos < 0.2;
-        let mascot_center = if is_minimized {
-            egui::pos2(current_base.left() + 32.0, current_base.center().y)
-        } else {
-            current_base.center()
-        };
-        let anim_t = self.anim.elapsed().as_secs_f32();
-        self.mascot.update(
-            dt,
-            anim_t,
-            cursor_pos,
-            mascot_center,
-            &self.agent.status,
-            true,
-        );
+        if self.mascot_visible()
+            || self.agent.active
+            || self.mascot.dizzy_timer > 0.0
+            || !self.mascot.squish.settled()
+        {
+            let (mx, my) = self.hover.get();
+            let cursor_pos = Some(egui::pos2(mx, my));
+            let is_minimized = self.open.pos < 0.2;
+            let mascot_center = if is_minimized {
+                egui::pos2(current_base.left() + 32.0, current_base.center().y)
+            } else {
+                current_base.center()
+            };
+            let anim_t = self.anim.elapsed().as_secs_f32();
+            self.mascot.update(
+                dt,
+                anim_t,
+                cursor_pos,
+                mascot_center,
+                &self.agent.status,
+                true,
+            );
+        }
 
         // Posisi lagu dihaluskan di antara dua pembacaan SMTC (500 ms),
         // supaya lirik tidak melompat tiap setengah detik.

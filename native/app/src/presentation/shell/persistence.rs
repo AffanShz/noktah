@@ -49,14 +49,19 @@ impl Noktah {
     }
 
     pub(crate) fn check_reminders(&mut self, now_ms: i64) {
+        let mut changed = false;
         for task in reminders::missed_reminders(&self.todos, now_ms) {
             let pesan = format!("{}: {}", self.tr("tasks.reminder_title"), task.text);
             self.banner = Some((pesan, Instant::now()));
             if let Some(t) = self.todos.iter_mut().find(|t| t.id == task.id) {
                 t.notified_at = Some(now_ms);
+                changed = true;
+                crate::infrastructure::logger::info("reminders", "Task reminder triggered");
             }
         }
-        self.save_todos();
+        if changed {
+            self.save_todos();
+        }
     }
 
     pub(crate) fn check_daily_reset(&mut self) {
@@ -67,7 +72,7 @@ impl Noktah {
             reset_occurred = true;
         }
         if reset_occurred {
-            self.banner = Some(("Hari baru! Progres harian direset.".to_string(), Instant::now()));
+            self.banner = Some((self.tr("daily.reset_banner").to_string(), Instant::now()));
         }
     }
 }

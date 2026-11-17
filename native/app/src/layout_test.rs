@@ -1131,6 +1131,7 @@ mod tests {
         let ctx = egui::Context::default();
         let hover = crate::infrastructure::platform::Hover::new(false);
         let mut app = Noktah::new("test".to_string(), hover, &ctx);
+        app.settings = noktah_core::Settings::default();
 
         // Default 7 halaman aktif
         let default_pages = app.active_nav_pages();
@@ -1156,5 +1157,55 @@ mod tests {
         app.settings.nav_agent = false;
         let empty_fallback = app.active_nav_pages();
         assert_eq!(empty_fallback, vec![NotchPage::Home]);
+    }
+
+    #[test]
+    fn next_wake_hemat_saat_tertutup_tanpa_maskot() {
+        use crate::app::Noktah;
+        use std::time::Duration;
+        let ctx = egui::Context::default();
+        let hover = crate::infrastructure::platform::Hover::new(false);
+        let mut app = Noktah::new("test".to_string(), hover, &ctx);
+
+        app.open.target = 0.0;
+        app.open.snap();
+        app.open_h.target = 0.0;
+        app.open_h.snap();
+        app.pill.target = 180.0;
+        app.pill.snap();
+        app.dock_open.target = 0.0;
+        app.dock_open.snap();
+        app.scrubber_expand.target = 0.0;
+        app.scrubber_expand.snap();
+        app.lyrics_anim.target = 0.0;
+        app.lyrics_anim.snap();
+        app.minimal_mix.target = 0.0;
+        app.minimal_mix.snap();
+        app.media.active = false;
+        app.agent.active = false;
+        app.todos.clear();
+        app.banner = None;
+        app.transisi_at = None;
+        app.trimmed = true;
+
+        // Tanpa maskot mini: tidak boleh membangunkan 30 fps (32 ms)
+        app.settings.mini_agent = false;
+        let now_ms = chrono::Local::now().timestamp_millis();
+        assert!(
+            app.next_wake(now_ms) >= Duration::from_secs(1),
+            "next_wake saat tertutup tanpa maskot harus >= 1s, dapat {:?}",
+            app.next_wake(now_ms)
+        );
+
+        // Notch minimal juga menyembunyikan maskot mini
+        app.settings.mini_agent = true;
+        app.settings.minimal_notch = true;
+        app.minimal_mix.target = 1.0;
+        app.minimal_mix.snap();
+        assert!(
+            app.next_wake(now_ms) >= Duration::from_secs(1),
+            "next_wake saat notch minimal harus >= 1s, dapat {:?}",
+            app.next_wake(now_ms)
+        );
     }
 }
