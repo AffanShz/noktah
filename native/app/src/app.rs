@@ -145,7 +145,7 @@ pub struct Noktah {
     /// Kapan kursor terakhir terlihat di daerah dock. Dipakai menahan dock
     /// tetap terbuka selama kursor bergerak dari strip menuju ikon.
     pub(crate) dock_linger: Instant,
-    /// Halaman aktif di notch (0: Music & Lyrics Split, 1: Tasks, 2: Pomodoro, 3: System).
+    /// Halaman aktif di notch (mengikuti varian `NotchPage`: Home, Music, Pomodoro, Tasks, System, Ask, Agent).
     pub current_page: NotchPage,
     pub pomodoro: PomodoroState,
     pub is_charging: bool,
@@ -155,6 +155,9 @@ pub struct Noktah {
     pub(crate) idle_since: Option<Instant>,
     pub(crate) trimmed: bool,
     pub(crate) suppress_hover: bool,
+    pub(crate) confirm_reset_at: Option<Instant>,
+    pub(crate) show_diag_logs: bool,
+    pub(crate) diag_logs_cache: String,
     pub agent: noktah_core::model::AgentState,
     pub mascot: crate::presentation::mascot::MascotState,
     pub pending_permission: Option<(
@@ -175,7 +178,6 @@ pub enum NotchPage {
     Agent = 6,
 }
 
-#[allow(dead_code)]
 impl NotchPage {
     /// Halaman yang bisa dicapai lewat tombol chevron, **dalam urutan yang
     /// sama persis dengan ikon di bilah bawah**.
@@ -185,6 +187,7 @@ impl NotchPage {
     /// Music, Tasks, Pomodoro, System. Menekan chevron kanan dari Music
     /// melompati Focus dan mendarat di Tasks — terlihat seperti tombol yang
     /// mengacak urutan. Satu daftar, satu sumber kebenaran.
+    #[cfg(test)]
     pub const SWITCHER: [NotchPage; 7] = [
         NotchPage::Home,
         NotchPage::Music,
@@ -196,39 +199,8 @@ impl NotchPage {
     ];
 
     /// Jumlah halaman yang ikut siklus chevron.
+    #[cfg(test)]
     pub const COUNT: usize = Self::SWITCHER.len();
-
-    /// Posisi halaman di dalam `SWITCHER`.
-    fn switcher_index(&self) -> Option<usize> {
-        Self::SWITCHER.iter().position(|p| p == self)
-    }
-
-    /// Halaman sebelumnya dalam siklus (rotasi memutar).
-    pub fn prev(&self) -> Self {
-        match self.switcher_index() {
-            Some(0) => Self::SWITCHER[Self::SWITCHER.len() - 1],
-            Some(i) => Self::SWITCHER[i - 1],
-            None => NotchPage::Home,
-        }
-    }
-
-    /// Halaman berikutnya dalam siklus (rotasi memutar).
-    pub fn next(&self) -> Self {
-        match self.switcher_index() {
-            Some(i) if i + 1 < Self::SWITCHER.len() => Self::SWITCHER[i + 1],
-            Some(_) => Self::SWITCHER[0],
-            None => NotchPage::Home,
-        }
-    }
-
-    pub fn from_index(idx: usize) -> Self {
-        Self::SWITCHER.get(idx).copied().unwrap_or(NotchPage::Music)
-    }
-
-    /// Indeks halaman di dalam `SWITCHER`, untuk menyorot ikon yang aktif.
-    pub fn index_of(&self) -> Option<usize> {
-        self.switcher_index()
-    }
 
     pub fn icon(&self) -> icons::Icon {
         match self {
@@ -420,6 +392,9 @@ impl Noktah {
             idle_since: None,
             trimmed: false,
             suppress_hover: false,
+            confirm_reset_at: None,
+            show_diag_logs: false,
+            diag_logs_cache: String::new(),
             agent: noktah_core::model::AgentState::default(),
             mascot: crate::presentation::mascot::MascotState::new(),
             pending_permission: None,

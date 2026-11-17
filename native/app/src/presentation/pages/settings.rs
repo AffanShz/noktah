@@ -877,11 +877,15 @@ impl Noktah {
             ui.label(style::cap("© 2026 AffanShz. MIT License.", theme.faint));
         });
 
-        widgets::section(ui, "Pembaruan", &theme);
+        widgets::section(ui, i18n::t(lang, "settings.updates"), &theme);
         widgets::card_group(ui, |ui| {
             ui.horizontal(|ui| {
                 let checking = matches!(self.update_status, crate::infrastructure::updater::UpdateStatus::Checking);
-                let btn_label = if checking { "Memeriksa…" } else { "Periksa Pembaruan" };
+                let btn_label = if checking {
+                    i18n::t(lang, "settings.checking_update")
+                } else {
+                    i18n::t(lang, "settings.check_update")
+                };
                 if widgets::chip_button(ui, btn_label, checking, &theme) && !checking {
                     let _ = self.updater.tx.send(());
                 }
@@ -941,15 +945,15 @@ impl Noktah {
 
         widgets::section(ui, i18n::t(lang, "settings.data"), &theme);
         widgets::card_group(ui, |ui| {
-            ui.horizontal(|ui| {
-                if widgets::chip_button(ui, "Ekspor", false, &theme) {
+            ui.horizontal_wrapped(|ui| {
+                if widgets::chip_button(ui, i18n::t(lang, "settings.export"), false, &theme) {
                     crate::infrastructure::store::save("settings-export.json", &self.settings);
                     self.banner = Some((
                         "Setelan diekspor ke settings-export.json".into(),
                         std::time::Instant::now(),
                     ));
                 }
-                if widgets::chip_button(ui, "Impor", false, &theme) {
+                if widgets::chip_button(ui, i18n::t(lang, "settings.import"), false, &theme) {
                     let mut baru: noktah_core::Settings =
                         crate::infrastructure::store::load("settings-export.json");
                     baru.sanitize();
@@ -957,22 +961,116 @@ impl Noktah {
                     self.touch_settings();
                     self.banner = Some(("Setelan diimpor".into(), std::time::Instant::now()));
                 }
-                if widgets::chip_button(ui, i18n::t(lang, "settings.reset"), false, &theme) {
-                    crate::infrastructure::store::wipe();
-                    self.settings = noktah_core::Settings::default();
-                    self.todos.clear();
-                    self.chat.clear();
-                    self.touch_settings();
+                let confirming = self
+                    .confirm_reset_at
+                    .map(|t| t.elapsed() < std::time::Duration::from_secs(5))
+                    .unwrap_or(false);
+                if !confirming {
+                    self.confirm_reset_at = None;
+                }
+                let reset_label = if confirming {
+                    i18n::t(lang, "settings.reset_confirm")
+                } else {
+                    i18n::t(lang, "settings.reset")
+                };
+                if widgets::chip_button(ui, reset_label, confirming, &theme) {
+                    if !confirming {
+                        self.confirm_reset_at = Some(std::time::Instant::now());
+                    } else {
+                        crate::infrastructure::store::wipe();
+                        self.settings = noktah_core::Settings::default();
+                        self.todos.clear();
+                        self.chat.clear();
+                        self.pomodoro = noktah_core::model::PomodoroState::default();
+                        self.api_key.clear();
+                        self.api_key_input.clear();
+                        self.lyrics.clear();
+                        self.lyrics_for.clear();
+                        self.confirm_reset_at = None;
+                        self.touch_settings();
+                        self.banner = Some((
+                            i18n::t(lang, "settings.reset_done").into(),
+                            std::time::Instant::now(),
+                        ));
+                    }
                 }
             });
         });
-    }
 
-    // Legacy flat settings panel (kept for reference)
-    pub(crate) fn tab_settings(&mut self, ui: &mut egui::Ui) {
-        // This method is now a no-op since we use tabbed UI
-        // Kept for backwards compatibility if needed
-        self.draw_settings_tab_content(ui);
+        widgets::section(ui, i18n::t(lang, "settings.diagnostics"), &theme);
+        widgets::card_group(ui, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                if widgets::chip_button(ui, i18n::t(lang, "settings.open_data_dir"), false, &theme)
+                {
+                    let dir = crate::infrastructure::store::data_dir();
+                    let _ = std::fs::create_dir_all(&dir);
+                    #[cfg(windows)]
+                    {
+                        let _ = std::process::Command::new("explorer").arg(&dir).spawn();
+                    }
+                }
+
+                let toggle_label = if self.show_diag_logs {
+                    i18n::t(lang, "settings.hide_logs")
+                } else {
+                    i18n::t(lang, "settings.view_logs")
+                };
+                if widgets::chip_button(ui, toggle_label, self.show_diag_logs, &theme) {
+                    self.show_diag_logs = !self.show_diag_logs;
+                    if self.show_diag_logs {
+                        self.diag_logs_cache = crate::infrastructure::logger::tail_lines(200);
+                    }
+                }
+
+                if self.show_diag_logs
+                    && widgets::chip_button(ui, i18n::t(lang, "common.refresh"), false, &theme)
+                {
+                    self.diag_logs_cache = crate::infrastructure::logger::tail_lines(200);
+                }
+
+                if widgets::chip_button(ui, i18n::t(lang, "settings.copy_logs"), false, &theme) {
+                    let logs = if self.diag_logs_cache.is_empty() {
+                        crate::infrastructure::logger::tail_lines(200)
+                    } else {
+                        self.diag_logs_cache.clone()
+                    };
+                    ui.output_mut(|o| o.copied_text = logs);
+                    self.banner = Some((
+                        i18n::t(lang, "settings.logs_copied").into(),
+                        std::time::Instant::now(),
+                    ));
+                }
+
+                if widgets::chip_button(ui, i18n::t(lang, "settings.clear_logs"), false, &theme) {
+                    crate::infrastructure::logger::clear();
+                    self.diag_logs_cache.clear();
+                    self.banner = Some((
+                        i18n::t(lang, "settings.logs_cleared").into(),
+                        std::time::Instant::now(),
+                    ));
+                }
+            });
+
+            if self.show_diag_logs {
+                ui.add_space(6.0);
+                egui::ScrollArea::vertical()
+                    .id_salt("diag_logs_scroll")
+                    .max_height(150.0)
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        let text = if self.diag_logs_cache.trim().is_empty() {
+                            i18n::t(lang, "settings.logs_empty")
+                        } else {
+                            self.diag_logs_cache.as_str()
+                        };
+                        ui.label(
+                            egui::RichText::new(text)
+                                .font(egui::FontId::monospace(10.5))
+                                .color(theme.dim),
+                        );
+                    });
+            }
+        });
     }
 }
 
