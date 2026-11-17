@@ -26,8 +26,18 @@ impl Noktah {
         let frac = 1.0 - (rem as f32 / total as f32).clamp(0.0, 1.0);
 
         let header_h = widgets::page_header(ui, "FOCUS", &theme, |ui| {
+            let dnd_prefix = if self.is_focus_dnd_active() {
+                "DND • "
+            } else {
+                ""
+            };
             ui.label(style::cap(
-                format!("{} today", self.pomodoro.sessions_today),
+                format!(
+                    "{}{} today • {} 7d",
+                    dnd_prefix,
+                    self.pomodoro.sessions_today,
+                    self.pomodoro.weekly_total()
+                ),
                 theme.dim,
             ));
         });

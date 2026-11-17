@@ -426,21 +426,51 @@ pub fn spawn_tray_and_hotkey(_ctx: egui::Context) {}
 #[cfg(windows)]
 pub fn claim_single_instance() -> bool {
     use windows::core::PCWSTR;
-    use windows::Win32::Foundation::{GetLastError, ERROR_ALREADY_EXISTS};
+    use windows::Win32::Foundation::{
+        CloseHandle, GetLastError, ERROR_ALREADY_EXISTS, LPARAM, WPARAM,
+    };
     use windows::Win32::System::Threading::CreateMutexW;
+    use windows::Win32::UI::WindowsAndMessaging::{FindWindowW, PostMessageW, WM_COMMAND};
 
     let nama: Vec<u16> = "Local\\NoktahSingleInstance\0".encode_utf16().collect();
 
     unsafe {
         match CreateMutexW(None, true, PCWSTR(nama.as_ptr())) {
             Ok(handle) => {
-                if GetLastError() == ERROR_ALREADY_EXISTS {
-                    false
-                } else {
+                if GetLastError() != ERROR_ALREADY_EXISTS {
                     // Handle sengaja tidak ditutup: harus hidup selama proses.
-                    std::mem::forget(handle);
-                    true
+                    let _ = handle;
+                    return true;
                 }
+                let _ = CloseHandle(handle);
+
+                // Jika ada jendela tray Noktah di sesi desktop saat ini, minta keluar
+                // dengan rapi supaya instance baru dapat langsung menggantikannya.
+                if let Ok(tray_hwnd) = FindWindowW(
+                    windows::core::w!("NoktahTray"),
+                    windows::core::w!("NoktahTrayHost"),
+                ) {
+                    if !tray_hwnd.0.is_null() {
+                        let _ = PostMessageW(tray_hwnd, WM_COMMAND, WPARAM(1004), LPARAM(0));
+                        for _ in 0..15 {
+                            std::thread::sleep(std::time::Duration::from_millis(100));
+                            if let Ok(new_handle) = CreateMutexW(None, true, PCWSTR(nama.as_ptr()))
+                            {
+                                if GetLastError() != ERROR_ALREADY_EXISTS {
+                                    let _ = new_handle;
+                                    return true;
+                                }
+                                let _ = CloseHandle(new_handle);
+                            }
+                        }
+                    }
+                }
+
+                crate::infrastructure::logger::warn(
+                    "app",
+                    "Another Noktah instance is already active; exiting",
+                );
+                false
             }
             Err(_) => true,
         }
@@ -478,4 +508,51 @@ pub fn animations_enabled() -> bool {
 #[cfg(not(windows))]
 pub fn animations_enabled() -> bool {
     true
+}
+
+/// Membaca teks Unicode dari clipboard Windows secara aman dan terbatas.
+#[cfg(windows)]
+pub fn read_clipboard_text() -> Option<String> {
+    use windows::Win32::Foundation::{HANDLE, HGLOBAL};
+    use windows::Win32::System::DataExchange::{CloseClipboard, GetClipboardData, OpenClipboard};
+    use windows::Win32::System::Memory::{GlobalLock, GlobalUnlock};
+
+    const CF_UNICODETEXT_FMT: u32 = 13;
+    const MAX_CHARS: usize = 1_000_000;
+
+    unsafe {
+        if OpenClipboard(None).is_err() {
+            return None;
+        }
+        let result = (|| -> Option<String> {
+            let handle: HANDLE = GetClipboardData(CF_UNICODETEXT_FMT).ok()?;
+            if handle.is_invalid() || handle.0.is_null() {
+                return None;
+            }
+            let hglobal = HGLOBAL(handle.0);
+            let ptr = GlobalLock(hglobal) as *const u16;
+            if ptr.is_null() {
+                return None;
+            }
+            let mut len = 0usize;
+            while len < MAX_CHARS && *ptr.add(len) != 0 {
+                len += 1;
+            }
+            let slice = std::slice::from_raw_parts(ptr, len);
+            let text = String::from_utf16_lossy(slice);
+            let _ = GlobalUnlock(hglobal);
+            if text.trim().is_empty() {
+                None
+            } else {
+                Some(text)
+            }
+        })();
+        let _ = CloseClipboard();
+        result
+    }
+}
+
+#[cfg(not(windows))]
+pub fn read_clipboard_text() -> Option<String> {
+    None
 }

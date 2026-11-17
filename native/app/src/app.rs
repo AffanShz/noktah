@@ -22,12 +22,19 @@ use crate::presentation::theme::Theme;
 use eframe::egui;
 use noktah_core::{
     i18n, lrc,
-    model::{ChatMessage, MediaState, PomodoroState, Todo},
-    settings::{Lang, Settings},
+    model::{ChatMessage, MediaState, PomodoroState, Scratchpad, Todo},
+    settings::{DefaultPage, Lang, Settings},
 };
+use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Instant;
+
+/// Permintaan izin tool dari satu sesi agent yang mengantre secara FIFO.
+pub struct QueuedPermission {
+    pub request: noktah_core::model::PermissionRequest,
+    pub responder: std::sync::mpsc::SyncSender<noktah_core::model::PermissionDecision>,
+}
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum SettingsTab {
@@ -65,8 +72,14 @@ pub struct Noktah {
 
     pub todos: Vec<Todo>,
     pub todo_input: String,
+    pub scratchpad: Scratchpad,
+    pub(crate) notes_save_at: Option<Instant>,
+    pub(crate) notes_mode: bool,
 
     pub media: MediaState,
+    /// Waktu sejak sesi media aktif mulai berstatus pause (`!playing`), untuk
+    /// meredam jeda singkat `< 350 ms` saat lompat lagu (`Next`/`Prev`).
+    pub(crate) media_paused_since: Option<Instant>,
     pub lyrics: Vec<lrc::LrcLine>,
     pub lyrics_synced: bool,
     pub lyrics_status: LyricsStatus,
@@ -160,10 +173,7 @@ pub struct Noktah {
     pub(crate) diag_logs_cache: String,
     pub agent: noktah_core::model::AgentState,
     pub mascot: crate::presentation::mascot::MascotState,
-    pub pending_permission: Option<(
-        String,
-        std::sync::mpsc::SyncSender<noktah_core::model::PermissionDecision>,
-    )>,
+    pub pending_permissions: VecDeque<QueuedPermission>,
     pub ipc: crate::infrastructure::ipc::IpcHandle,
 }
 
@@ -287,6 +297,63 @@ impl Noktah {
     pub fn is_lyrics_synced(&self) -> bool {
         !self.lyrics.is_empty() && (self.lyrics_synced || self.lyrics.iter().any(|l| l.time >= 0.0))
     }
+
+    /// Menentukan halaman tujuan berdasarkan `settings.default_page` dengan
+    /// menghormati daftar halaman aktif (`active_nav_pages`). Mengembalikan `None`
+    /// jika pengguna memilih mempertahankan halaman terakhir dibuka.
+    pub fn resolve_default_page(&self) -> Option<NotchPage> {
+        let desired = match self.settings.default_page {
+            DefaultPage::LastOpened => return None,
+            DefaultPage::Home => NotchPage::Home,
+            DefaultPage::Music => NotchPage::Music,
+            DefaultPage::Pomodoro => NotchPage::Pomodoro,
+            DefaultPage::Tasks => NotchPage::Tasks,
+            DefaultPage::System => NotchPage::System,
+            DefaultPage::Ask => NotchPage::Ask,
+            DefaultPage::Agent => NotchPage::Agent,
+        };
+        let active = self.active_nav_pages();
+        if active.contains(&desired) {
+            Some(desired)
+        } else {
+            Some(active[0])
+        }
+    }
+
+    /// Apakah mode Fokus DND sedang menahan banner non-esensial.
+    pub fn is_focus_dnd_active(&self) -> bool {
+        self.settings.focus_dnd
+            && self.pomodoro.running
+            && self.pomodoro.mode == noktah_core::model::PomodoroMode::Focus
+    }
+
+    /// Menyelesaikan permintaan izin terdepan pada antrean FIFO dan mempromosikan
+    /// antrean berikutnya (jika ada) tanpa menutup panel.
+    pub fn resolve_front_permission(
+        &mut self,
+        decision: noktah_core::model::PermissionDecision,
+        approved_prompt: Option<&str>,
+        now_ms: i64,
+    ) {
+        let Some(front) = self.pending_permissions.pop_front() else {
+            return;
+        };
+        let _ = front.responder.send(decision);
+
+        if let Some(next) = self.pending_permissions.front() {
+            self.agent.status =
+                noktah_core::model::AgentStatus::AwaitingApproval(next.request.clone());
+        } else {
+            self.agent.status = match approved_prompt {
+                Some(prompt) => noktah_core::model::AgentStatus::PromptSubmitted {
+                    prompt: prompt.to_string(),
+                    timestamp: now_ms,
+                },
+                None => noktah_core::model::AgentStatus::Idle,
+            };
+            self.close_panel();
+        }
+    }
     pub fn new(renderer: String, hover: Arc<Hover>, ctx: &egui::Context) -> Self {
         let mut settings: Settings = store::load("settings.json");
         let force_anim = settings.force_animation;
@@ -296,6 +363,7 @@ impl Noktah {
         let lang = settings.language;
         let start_open = settings.start_expanded;
         let todos: Vec<Todo> = store::load("tasks.json");
+        let scratchpad: Scratchpad = store::load("notes.json");
         let chat: Vec<ChatMessage> = store::load("chat.json");
         let pomodoro: PomodoroState = store::load("pomodoro.json");
         let (is_charging, battery_pct) = crate::infrastructure::os::power_status();
@@ -309,7 +377,7 @@ impl Noktah {
 
         hover.expanded.store(start_open, Ordering::Relaxed);
 
-        Self {
+        let mut app = Self {
             open: Spring::from_spec(if start_open { 1.0 } else { 0.0 }, MORPH_OPEN_W),
             open_h: Spring::from_spec(if start_open { 1.0 } else { 0.0 }, MORPH_OPEN_H),
             hovered: start_open,
@@ -336,7 +404,11 @@ impl Noktah {
             stats_at: Instant::now(),
             todos,
             todo_input: String::new(),
+            scratchpad,
+            notes_save_at: None,
+            notes_mode: false,
             media: MediaState::default(),
+            media_paused_since: None,
             lyrics: Vec::new(),
             lyrics_synced: false,
             lyrics_status: LyricsStatus::Idle,
@@ -397,9 +469,13 @@ impl Noktah {
             diag_logs_cache: String::new(),
             agent: noktah_core::model::AgentState::default(),
             mascot: crate::presentation::mascot::MascotState::new(),
-            pending_permission: None,
+            pending_permissions: VecDeque::new(),
             ipc: crate::infrastructure::ipc::spawn(ctx.clone()),
+        };
+        if let Some(p) = app.resolve_default_page() {
+            app.current_page = p;
         }
+        app
     }
 
     pub fn tr(&self, key: &str) -> &'static str {

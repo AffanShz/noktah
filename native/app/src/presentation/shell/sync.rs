@@ -55,7 +55,7 @@ impl Noktah {
                 // sesaat menampilkan judul lagu baru. Hanya untuk pergantian
                 // di antara dua lagu — lagu pertama tidak ada yang perlu
                 // "diintip".
-                if self.settings.sneak_peek && !self.lyrics_for.is_empty() {
+                if self.settings.sneak_peek && !self.lyrics_for.is_empty() && !self.is_focus_dnd_active() {
                     self.peek_until = Some(Instant::now() + SNEAK_PEEK);
                 }
                 self.lyrics_for = track.clone();
@@ -159,6 +159,16 @@ impl Noktah {
         if text.is_empty() || self.ai_busy {
             return;
         }
+        self.chat_input.clear();
+        self.send_prompt(text);
+    }
+
+    /// Mengirim prompt apa pun (dari kolom tulis atau aksi kilat) ke penyedia AI aktif.
+    pub fn send_prompt(&mut self, text: String) {
+        let text = text.trim().to_string();
+        if text.is_empty() || self.ai_busy {
+            return;
+        }
 
         let now = chrono::Local::now().timestamp_millis();
         self.chat.push(ChatMessage {
@@ -173,7 +183,6 @@ impl Noktah {
             content: String::new(),
             at: now,
         });
-        self.chat_input.clear();
         self.ai_busy = true;
 
         let messages: Vec<(noktah_core::model::Role, String)> = self
@@ -275,13 +284,15 @@ impl Noktah {
     pub(crate) fn poll_ipc(&mut self) {
         let now = chrono::Utc::now().timestamp_millis();
 
-        // 1. Auto-decay heartbeat: jika tidak ada aktivitas selama 45 detik,
+        // 1. Auto-decay heartbeat: jika tidak ada aktivitas selama 45 detik dan tidak ada antrean izin,
         // reset agent.active ke false agar CPU Noktah kembali tidur 60s per frame
         const AGENT_TIMEOUT_MS: i64 = 45_000;
-        if self.agent.active && (now - self.agent.updated_at) > AGENT_TIMEOUT_MS {
+        if self.agent.active
+            && self.pending_permissions.is_empty()
+            && (now - self.agent.updated_at) > AGENT_TIMEOUT_MS
+        {
             self.agent.active = false;
             self.agent.status = noktah_core::model::AgentStatus::Idle;
-            self.pending_permission = None;
         }
 
         // 2. Tarik event dari IPC channel
@@ -421,19 +432,27 @@ impl Noktah {
                     tool_name,
                     tool_input,
                     suggestions,
+                    session_title,
                     responder,
                 } => {
                     self.agent.active = true;
                     self.agent.updated_at = now;
-                    self.pending_permission = Some((request_id.clone(), responder));
-                    self.agent.status = noktah_core::model::AgentStatus::AwaitingApproval(
-                        noktah_core::model::PermissionRequest {
-                            request_id,
-                            tool_name,
-                            tool_input,
-                            suggestions,
-                        },
-                    );
+                    let req = noktah_core::model::PermissionRequest {
+                        request_id,
+                        tool_name,
+                        tool_input,
+                        suggestions,
+                        session_title,
+                    };
+                    self.pending_permissions.push_back(crate::app::QueuedPermission {
+                        request: req,
+                        responder,
+                    });
+                    if let Some(front) = self.pending_permissions.front() {
+                        self.agent.status = noktah_core::model::AgentStatus::AwaitingApproval(
+                            front.request.clone(),
+                        );
+                    }
 
                     // Buka notch otomatis untuk menampilkan modal approval
                     self.open.target = 1.0;
@@ -441,9 +460,15 @@ impl Noktah {
                     self.current_page = crate::app::NotchPage::Agent;
                 }
                 crate::infrastructure::ipc::IpcEvent::PermissionCanceled(req_id) => {
-                    if let Some((pending_id, _)) = &self.pending_permission {
-                        if pending_id == &req_id {
-                            self.pending_permission = None;
+                    let before = self.pending_permissions.len();
+                    self.pending_permissions
+                        .retain(|item| item.request.request_id != req_id);
+                    if self.pending_permissions.len() != before {
+                        if let Some(next) = self.pending_permissions.front() {
+                            self.agent.status = noktah_core::model::AgentStatus::AwaitingApproval(
+                                next.request.clone(),
+                            );
+                        } else {
                             self.agent.status = noktah_core::model::AgentStatus::Idle;
                             // Tutup notch jika tidak sedang di-hover kursor
                             if self.hover_since.is_none() {

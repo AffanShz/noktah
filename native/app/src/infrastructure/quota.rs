@@ -110,7 +110,7 @@ pub fn terdeteksi() -> bool {
 /// Implementasi langsung dari FIPS 180-4. Hanya dipakai untuk menurunkan token
 /// lokal dari berkas rahasia yang sudah ada di disk, bukan untuk menyimpan
 /// sandi.
-mod sha256 {
+pub(crate) mod sha256 {
     const K: [u32; 64] = [
         0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
         0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,

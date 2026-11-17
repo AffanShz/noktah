@@ -42,6 +42,28 @@ impl Noktah {
                     }
                 },
             );
+            widgets::card_divider(ui);
+            widgets::row_desc(
+                ui,
+                i18n::t(lang, "settings.default_page"),
+                i18n::t(lang, "settings.default_page_desc"),
+                &theme,
+                |ui| {
+                    egui::ComboBox::from_id_salt("default_page")
+                        .selected_text(self.settings.default_page.label(lang))
+                        .show_ui(ui, |ui| {
+                            for page in noktah_core::DefaultPage::ALL {
+                                if ui
+                                    .selectable_label(self.settings.default_page == page, page.label(lang))
+                                    .clicked()
+                                {
+                                    self.settings.default_page = page;
+                                    self.touch_settings();
+                                }
+                            }
+                        });
+                },
+            );
         });
 
         widgets::section(ui, i18n::t(lang, "settings.language"), &theme);
@@ -368,6 +390,18 @@ impl Noktah {
         });
         ui.add_space(style::S2);
 
+        widgets::row_desc(
+            ui,
+            i18n::t(lang, "settings.mini_idle_on_pause"),
+            i18n::t(lang, "settings.mini_idle_on_pause_desc"),
+            theme,
+            |ui| {
+                if widgets::toggle(ui, &mut self.settings.mini_idle_on_pause, theme) {
+                    self.touch_settings();
+                }
+            },
+        );
+
         // Toggle Bebas Setiap Elemen
         widgets::row_desc(
             ui,
@@ -527,7 +561,7 @@ impl Noktah {
     }
 
     /// Tab 5: Pomodoro — focus timer settings
-    fn draw_pomodoro_tab(&mut self, ui: &mut egui::Ui, _lang: noktah_core::settings::Lang, theme: Theme) {
+    fn draw_pomodoro_tab(&mut self, ui: &mut egui::Ui, lang: noktah_core::settings::Lang, theme: Theme) {
         widgets::section(ui, "Focus Session", &theme);
         widgets::card_group(ui, |ui| {
             widgets::row(
@@ -588,14 +622,36 @@ impl Noktah {
                     theme.faint,
                 ));
             });
+            widgets::card_divider(ui);
+            widgets::row_desc(
+                ui,
+                i18n::t(lang, "settings.focus_dnd"),
+                i18n::t(lang, "settings.focus_dnd_desc"),
+                &theme,
+                |ui| {
+                    if widgets::toggle(ui, &mut self.settings.focus_dnd, &theme) {
+                        self.touch_settings();
+                    }
+                },
+            );
         });
 
         widgets::section(ui, "Activity", &theme);
         widgets::card_group(ui, |ui| {
-            ui.label(style::cap(
-                format!("{} sessions completed today", self.pomodoro.sessions_today),
-                theme.ink,
-            ));
+            let summary = if lang == noktah_core::Lang::Id {
+                format!(
+                    "{} sesi selesai hari ini · {} sesi dalam 7 hari terakhir",
+                    self.pomodoro.sessions_today,
+                    self.pomodoro.weekly_total()
+                )
+            } else {
+                format!(
+                    "{} sessions completed today · {} in last 7 days",
+                    self.pomodoro.sessions_today,
+                    self.pomodoro.weekly_total()
+                )
+            };
+            ui.label(style::cap(summary, theme.ink));
         });
     }
 
@@ -879,35 +935,44 @@ impl Noktah {
 
         widgets::section(ui, i18n::t(lang, "settings.updates"), &theme);
         widgets::card_group(ui, |ui| {
+            use crate::infrastructure::updater::{UpdateStatus, UpdaterCmd};
+
             ui.horizontal(|ui| {
-                let checking = matches!(self.update_status, crate::infrastructure::updater::UpdateStatus::Checking);
-                let btn_label = if checking {
+                let busy = matches!(
+                    self.update_status,
+                    UpdateStatus::Checking | UpdateStatus::Downloading { .. }
+                );
+                let btn_label = if matches!(self.update_status, UpdateStatus::Checking) {
                     i18n::t(lang, "settings.checking_update")
                 } else {
                     i18n::t(lang, "settings.check_update")
                 };
-                if widgets::chip_button(ui, btn_label, checking, &theme) && !checking {
-                    let _ = self.updater.tx.send(());
+                if widgets::chip_button(ui, btn_label, busy, &theme) && !busy {
+                    self.update_status = UpdateStatus::Checking;
+                    let _ = self.updater.tx.send(UpdaterCmd::Check);
                 }
             });
 
             ui.add_space(6.0);
 
+            let mut pending_cmd: Option<UpdaterCmd> = None;
+            let mut apply_staged: Option<(std::path::PathBuf, Option<std::path::PathBuf>)> = None;
+
             match &self.update_status {
-                crate::infrastructure::updater::UpdateStatus::Idle => {
+                UpdateStatus::Idle => {
                     ui.label(style::cap("Klik tombol di atas untuk memeriksa rilis terbaru di GitHub.", theme.dim));
                 }
-                crate::infrastructure::updater::UpdateStatus::Checking => {
+                UpdateStatus::Checking => {
                     ui.label(style::cap("Menghubungi GitHub Releases…", theme.accent));
                 }
-                crate::infrastructure::updater::UpdateStatus::LatestVersion(ver) => {
+                UpdateStatus::LatestVersion(ver) => {
                     ui.label(
                         egui::RichText::new(format!("✓ Noktah sudah menggunakan versi terbaru ({ver})"))
                             .size(style::T_CAPTION)
                             .color(Color32::from_rgb(34, 197, 94)),
                     );
                 }
-                crate::infrastructure::updater::UpdateStatus::UpdateAvailable { version, name, body, url } => {
+                UpdateStatus::UpdateAvailable { version, name, body, url, zip_url } => {
                     ui.label(
                         egui::RichText::new(format!("★ Pembaruan Tersedia: {name} ({version})"))
                             .size(style::T_BODY)
@@ -923,22 +988,83 @@ impl Noktah {
 
                     ui.add_space(6.0);
                     let url_clone = url.clone();
-                    if widgets::chip_button(ui, "Buka Halaman Rilis GitHub ↗", false, &theme) {
-                        ui.ctx().open_url(egui::OpenUrl::new_tab(&url_clone));
-                        #[cfg(windows)]
-                        {
-                            let _ = std::process::Command::new("cmd")
-                                .args(["/C", "start", "", &url_clone])
-                                .spawn();
+                    let ver_clone = version.clone();
+                    let zip_clone = zip_url.clone();
+                    ui.horizontal_wrapped(|ui| {
+                        if let Some(z_url) = zip_clone {
+                            if widgets::chip_button(ui, i18n::t(lang, "settings.self_update"), true, &theme) {
+                                pending_cmd = Some(UpdaterCmd::DownloadAndStage {
+                                    version: ver_clone,
+                                    zip_url: z_url,
+                                });
+                            }
                         }
+                        if widgets::chip_button(ui, "Buka Halaman Rilis GitHub ↗", false, &theme) {
+                            ui.ctx().open_url(egui::OpenUrl::new_tab(&url_clone));
+                            #[cfg(windows)]
+                            {
+                                let _ = std::process::Command::new("cmd")
+                                    .args(["/C", "start", "", &url_clone])
+                                    .spawn();
+                            }
+                        }
+                    });
+                }
+                UpdateStatus::Downloading { version } => {
+                    ui.label(
+                        egui::RichText::new(format!(
+                            "{} ({version})",
+                            i18n::t(lang, "settings.downloading_update")
+                        ))
+                        .size(style::T_CAPTION)
+                        .color(theme.accent),
+                    );
+                }
+                UpdateStatus::ReadyToRestart { version, staged_exe, staged_hook } => {
+                    ui.label(
+                        egui::RichText::new(format!("✓ Paket {version} terverifikasi SHA-256 dan siap dipasang."))
+                            .size(style::T_CAPTION)
+                            .color(Color32::from_rgb(34, 197, 94)),
+                    );
+                    ui.add_space(6.0);
+                    if widgets::chip_button(ui, i18n::t(lang, "settings.restart_to_apply"), true, &theme) {
+                        apply_staged = Some((staged_exe.clone(), staged_hook.clone()));
                     }
                 }
-                crate::infrastructure::updater::UpdateStatus::Error(err) => {
+                UpdateStatus::Error(err) => {
                     ui.label(
                         egui::RichText::new(format!("Gagal: {err}"))
                             .size(style::T_CAPTION)
                             .color(Color32::from_rgb(239, 68, 68)),
                     );
+                }
+            }
+
+            if let Some(cmd) = pending_cmd {
+                if let UpdaterCmd::DownloadAndStage { ref version, .. } = cmd {
+                    self.update_status = UpdateStatus::Downloading {
+                        version: version.clone(),
+                    };
+                }
+                let _ = self.updater.tx.send(cmd);
+            }
+
+            if let Some((exe, hook)) = apply_staged {
+                if self.save_at.is_some() {
+                    crate::infrastructure::store::save("settings.json", &self.settings);
+                    self.save_at = None;
+                }
+                if self.notes_save_at.is_some() {
+                    crate::infrastructure::store::save("notes.json", &self.scratchpad);
+                    self.notes_save_at = None;
+                }
+                match crate::infrastructure::updater::apply_staged_and_restart(&exe, hook.as_deref()) {
+                    Ok(()) => {
+                        std::process::exit(0);
+                    }
+                    Err(err) => {
+                        self.update_status = UpdateStatus::Error(err);
+                    }
                 }
             }
         });
@@ -980,6 +1106,8 @@ impl Noktah {
                         crate::infrastructure::store::wipe();
                         self.settings = noktah_core::Settings::default();
                         self.todos.clear();
+                        self.scratchpad = noktah_core::model::Scratchpad::default();
+                        self.notes_save_at = None;
                         self.chat.clear();
                         self.pomodoro = noktah_core::model::PomodoroState::default();
                         self.api_key.clear();

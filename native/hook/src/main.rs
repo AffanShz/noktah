@@ -141,7 +141,11 @@ unsafe fn read_exact_overlapped(pipe: HANDLE, buf: &mut [u8], timeout_ms: u32) -
 
 fn print_help() {
     println!(
-r#"noktah-hook v1.2.0 - Universal Mascot & Agent Hook for Noktah
+        "{}",
+        concat!(
+            "noktah-hook v",
+            env!("CARGO_PKG_VERSION"),
+r#" - Universal Mascot & Agent Hook for Noktah
 
 PENGGUNAAN:
     noktah-hook [OPTIONS]
@@ -174,6 +178,7 @@ CONTOH PENGGUNAAN:
     noktah-hook --status working --tool "npm run build" --title "Frontend Build"
     noktah-hook --status approval --tool "rm -rf" --input "target/"
 "#
+        )
     );
 }
 
@@ -315,6 +320,31 @@ fn main() {
         }
         if let Some(title) = options_title {
             obj.insert("session_title".to_string(), serde_json::Value::String(title));
+        } else if !obj
+            .get("session_title")
+            .and_then(|v| v.as_str())
+            .map_or(false, |s| !s.trim().is_empty())
+        {
+            let derived = obj
+                .get("cwd")
+                .and_then(|v| v.as_str())
+                .and_then(|p| std::path::Path::new(p).file_name())
+                .and_then(|n| n.to_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_string)
+                .or_else(|| {
+                    std::env::current_dir().ok().and_then(|d| {
+                        d.file_name()
+                            .and_then(|n| n.to_str())
+                            .map(str::trim)
+                            .filter(|s| !s.is_empty())
+                            .map(str::to_string)
+                    })
+                });
+            if let Some(title) = derived {
+                obj.insert("session_title".to_string(), serde_json::Value::String(title));
+            }
         }
     }
 

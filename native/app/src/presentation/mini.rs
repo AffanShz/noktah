@@ -11,6 +11,8 @@ pub struct MiniCtx<'a> {
     pub theme: &'a Theme,
     pub settings: &'a Settings,
     pub media: &'a MediaState,
+    /// Apakah baris minimized menampilkan mode pemutar musik (bukan mode idle).
+    pub show_media: bool,
     pub lyric: Option<&'a str>,
     pub prev_lyric: Option<&'a str>,
     pub lyric_trans: f32,
@@ -40,6 +42,8 @@ pub struct MiniCtx<'a> {
     pub agent: &'a noktah_core::model::AgentState,
     pub mascot: &'a crate::presentation::mascot::MascotState,
     pub banner: Option<&'a str>,
+    pub pending_approval_count: usize,
+    pub focus_dnd_rem: Option<u32>,
 }
 
 const PAD: f32 = 20.0;
@@ -217,7 +221,17 @@ fn draw_minimal_pill(painter: &Painter, rect: Rect, ctx: &MiniCtx) {
     let center_label = if let Some(banner) = ctx.banner {
         banner.to_string()
     } else if ctx.agent.active {
-        format_agent_status_label(&ctx.agent.status, &ctx.clock)
+        if matches!(
+            ctx.agent.status,
+            noktah_core::model::AgentStatus::AwaitingApproval(_)
+        ) && ctx.pending_approval_count > 1
+        {
+            format!("Izin (1/{}) [Alt+Y/N]", ctx.pending_approval_count)
+        } else {
+            format_agent_status_label(&ctx.agent.status, &ctx.clock)
+        }
+    } else if let Some(rem) = ctx.focus_dnd_rem {
+        format!("DND {:02}:{:02} • {}", rem / 60, rem % 60, ctx.clock)
     } else {
         ctx.clock.clone()
     };
@@ -295,8 +309,9 @@ pub fn draw(painter: &Painter, rect: Rect, ctx: &MiniCtx) {
     let theme = ctx.theme;
     let cy = rect.center().y;
 
-    // Jika ada banner HUD aktif atau tanpa lagu: tampilkan pill minimal / HUD banner
-    if ctx.banner.is_some() || !ctx.media.active {
+    // Jika ada banner HUD aktif atau mode musik sedang disembunyikan (idle / pause):
+    // tampilkan pill minimal / HUD banner.
+    if ctx.banner.is_some() || !ctx.show_media {
         draw_minimal_pill(painter, rect, ctx);
         return;
     }
@@ -1035,6 +1050,7 @@ mod tests {
             tool_name: "Bash".to_string(),
             tool_input: serde_json::Value::Null,
             suggestions: Vec::new(),
+            session_title: None,
         });
         assert_eq!(format_agent_status_label(&status_appr, clock), "Izin [Alt+Y / Alt+N]");
 
