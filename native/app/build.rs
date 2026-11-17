@@ -26,10 +26,10 @@ fn main() {
 
     // asInvoker: aplikasi ini tidak butuh hak admin. Manifest yang jujur
     // membuat perilakunya bisa diprediksi, termasuk oleh pemindai.
-    res.set_manifest(
+    let manifest = format!(
         r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
-  <assemblyIdentity type="win32" name="Noktah.App" version="1.2.0.0" processorArchitecture="amd64"/>
+  <assemblyIdentity type="win32" name="Noktah.App" version="{}.0" processorArchitecture="amd64"/>
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
     <security>
       <requestedPrivileges>
@@ -39,12 +39,14 @@ fn main() {
   </trustInfo>
   <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
     <application>
-      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"/>
+      <supportedOS Id="{{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}}"/>
     </application>
   </compatibility>
 </assembly>
 "#,
+        env!("CARGO_PKG_VERSION")
     );
+    res.set_manifest(&manifest);
 
     if let Err(err) = res.compile() {
         // Jangan gagalkan build: resource hanya menambah kredibilitas.
