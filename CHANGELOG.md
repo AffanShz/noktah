@@ -3,6 +3,21 @@
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/),
 versi mengikuti [SemVer](https://semver.org/lang/id/).
 
+## [1.3.0] - 2026-11-18
+
+### Ditambahkan
+- **One-Click In-App Self-Updater** — Pengunduhan arsip `-win64.zip` resmi GitHub Releases dari Settings → About, verifikasi otomatis SHA-256 terhadap `BACA-DULU.txt`, ekstraksi staging ke folder lokal, penggantian biner `noktah-native.exe` + `noktah-hook.exe`, dan restart otomatis aplikasi.
+- **Multi-Agent FIFO Permission Queue** — Mengganti slot tunggal dengan antrean FIFO `VecDeque<QueuedPermission>`, label antrean `(1/N)` pada pill minimal & modal Agent, serta label sesi/workspace (`session_title`) otomatis dari argumen `--title` atau nama folder kerja (`cwd`) di `noktah-hook`.
+- **Halaman Default & Pintasan Keyboard Cepat** — Pengaturan `default_page` di Settings → General (*Last opened*, *Home*, *Music*, *Focus*, *Tasks*, *System*, *Ask*, *Agent*) serta pintasan `Alt+1..7` untuk berpindah tab dock dan `Esc` untuk menutup panel.
+- **Quick AI Actions di Halaman Ask** — Tombol aksi kilat satu klik (`ID↔EN`, `Ringkas`, `Jelaskan`, `Bersihkan`) yang mengambil teks dari kolom input atau clipboard Windows melalui kunci DPAPI aktif.
+- **Scratchpad / Catatan Cepat di Halaman Tasks** — Toggle `Tugas | Catatan` beserta tombol `Copy` dan autosave ter-debounce 400 ms ke `notes.json` (ikut dibersihkan pada *Reset all data*).
+- **Focus Mode DND, Rekap Fokus 7 Hari & Home Day Progress** — Opsi `focus_dnd` di Settings → Pomodoro untuk menahan banner pengingat dan intip lagu saat timer Fokus aktif, indikator `DND` di pill/Fokus, arsip riwayat fokus 7 hari terakhir (`weekly_total()`), serta persentase & hairline *Day Progress* pada kartu Home.
+- **Setelan Kembali ke Mode Idle saat Musik Dijeda (`mini_idle_on_pause`) & Single-Instance Handoff** — Pilihan untuk menciutkan pill kembali ke tampilan jam & Noki saat audio dijeda atau tidak aktif (termasuk handoff antar instance aplikasi lewat `Local\NoktahSingleInstance`).
+
+### Diubah & Diperbaiki
+- **Penghapusan Tombol Settings Ganda di Halaman `SYSTEM`** — Menghapus tombol chip `Settings` di kanan atas header halaman System karena ikon Settings sudah tersedia permanen di dock navigasi.
+- **Unit & Layout Test Tambahan** — Penambahan test untuk `day_progress_pct`, riwayat fokus 7 hari + `Scratchpad`, `DefaultPage` & `focus_dnd`, parser & verifikator SHA-256 self-updater, pembersihan `notes.json`, `mini_idle_on_pause`, serta alur antrean FIFO multi-agent.
+
 ## [1.2.2] - 2026-11-18
 
 ### Ditambahkan
