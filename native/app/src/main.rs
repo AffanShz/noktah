@@ -34,20 +34,12 @@ mod presentation;
 // Modul yang belum dipindah ke lapisannya. Setiap penghapusan di daftar ini
 // adalah satu langkah refactor yang selesai.
 mod app;
-mod tabs;
 
 #[cfg(test)]
 mod layout_test;
 
 #[cfg(test)]
 mod page_fit_test;
-
-// Re-export supaya path lama (`crate::presentation::style`, `crate::infrastructure::store`, ...) tetap
-// berfungsi selama migrasi bertahap. Setelah semua pemanggil memakai path
-// berlapis, blok ini dihapus.
-pub(crate) use application as app_layer;
-pub(crate) use infrastructure as infra;
-pub(crate) use presentation as ui;
 
 use eframe::egui;
 use eframe::glow::HasContext;
@@ -98,6 +90,11 @@ fn setup_panic_logger() {
             use std::io::Write;
             let _ = f.write_all(log_line.as_bytes());
         }
+
+        infrastructure::logger::error(
+            "panic",
+            &format!("thread '{}' at {}: {}", thread_name, location, payload),
+        );
     }));
 }
 
@@ -108,6 +105,11 @@ fn main() -> eframe::Result<()> {
     if !infrastructure::os::claim_single_instance() {
         return Ok(());
     }
+
+    infrastructure::logger::info(
+        "app",
+        &format!("Noktah v{} started", env!("CARGO_PKG_VERSION")),
+    );
 
     let settings: noktah_core::settings::Settings = infrastructure::store::load("settings.json");
     let x = infrastructure::platform::initial_position();

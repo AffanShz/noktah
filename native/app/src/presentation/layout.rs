@@ -78,8 +78,6 @@ pub const DOCK_PAD: f32 = 8.0;
 pub const fn dock_group_w(n: usize) -> f32 {
     DOCK_TAB_W * n as f32 + DOCK_PAD
 }
-/// Lebar kapsul dock pada jumlah tab saat ini (5 tab = 188 px).
-pub const DOCK_GROUP_W: f32 = dock_group_w(5);
 /// Lebar strip saat menganggur — tiga garis, bukan selebar isinya.
 pub const DOCK_STRIP_W: f32 = 38.0;
 /// Berapa lama dock bertahan terbuka setelah kursor terakhir terlihat di

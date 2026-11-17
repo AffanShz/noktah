@@ -261,7 +261,7 @@ mod tests {
     /// Kapsul latar dock harus selalu memuat seluruh baris tab.
     ///
     /// Kelas bug yang ditangkap: lebar kapsul dulu dikalikan pegas
-    /// (`DOCK_GROUP_W * dock_open`) sedangkan tab tetap ditata pada 210 px.
+    /// (`dock_group_w(n) * dock_open`) sedangkan tab tetap ditata pada lebar penuh.
     /// Di tengah animasi kapsul hanya selebar 54 px setengah — ikon terjauh
     /// menonjol 51 px keluar, dan tepi kapsul memotongnya. Gejalanya di layar:
     /// tab Focus dan Ask terlihat terpotong oleh latar navbar.
