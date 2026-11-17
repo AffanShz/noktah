@@ -46,6 +46,26 @@ impl Noktah {
         open_agent || mini_mascot
     }
 
+    /// Apakah musik dihitung sedang berputar untuk baris minimized (dengan
+    /// toleransi 350 ms saat pergantian lagu agar pill tidak berkedip ke idle).
+    pub(crate) fn mini_media_playing(&self) -> bool {
+        if !self.media.active {
+            return false;
+        }
+        if self.media.playing {
+            return true;
+        }
+        self.media_paused_since
+            .map(|at| at.elapsed() < Duration::from_millis(350))
+            .unwrap_or(false)
+    }
+
+    /// Apakah baris minimized sedang menampilkan mode musik (bukan mode idle).
+    pub(crate) fn show_media_in_mini(&self) -> bool {
+        self.settings
+            .show_media_in_mini(self.media.active, self.mini_media_playing())
+    }
+
     /// Selisih waktu sampai repaint berikutnya yang berguna.
     ///
     /// Selama bentuk masih bergerak, hasilnya nol: frame berikutnya diminta
@@ -71,12 +91,24 @@ impl Noktah {
         if self.banner.as_ref().map(|(_, at)| at.elapsed().as_secs_f32() < 4.0).unwrap_or(false) {
             return Duration::from_millis(32);
         }
+        // Jika baru saja masuk status pause dan setelan idle-saat-jeda aktif,
+        // jadwalkan bangun tepat setelah jendela toleransi 350 ms berakhir.
+        if self.settings.mini_idle_on_pause && self.media.active && !self.media.playing {
+            if let Some(at) = self.media_paused_since {
+                let elapsed = at.elapsed();
+                if elapsed < Duration::from_millis(350) {
+                    return Duration::from_millis(360)
+                        .saturating_sub(elapsed)
+                        .max(Duration::from_millis(16));
+                }
+            }
+        }
         // Maskot idle atau agent aktif butuh ~30 fps untuk breathing & gaze tracking,
         // namun hanya saat maskot terlihat atau saat menunggu persetujuan izin.
         if let noktah_core::model::AgentStatus::AwaitingApproval(_) = self.agent.status {
             return Duration::from_millis(16); // 60fps untuk bouncy mascot hop
         }
-        if self.mascot_visible() && (!self.media.active || self.agent.active) {
+        if self.mascot_visible() && (!self.show_media_in_mini() || self.agent.active) {
             if let noktah_core::model::AgentStatus::ToolRunning { .. } = self.agent.status {
                 return Duration::from_millis(32); // 30fps untuk animasi komet & timer
             }
@@ -292,9 +324,9 @@ impl eframe::App for Noktah {
             }
         }
 
-        // Guard anti-stuck: jika cursor di luar dan tidak ada pending approval,
+        // Guard anti-stuck: jika cursor di luar dan tidak ada antrean approval,
         // panel wajib menutup kembali ke minimize.
-        if !inside && self.pending_permission.is_none() && self.open.target > 0.0 {
+        if !inside && self.pending_permissions.is_empty() && self.open.target > 0.0 {
             self.open.target = 0.0;
             self.open_h.target = 0.0;
             self.hovered = false;
@@ -312,6 +344,11 @@ impl eframe::App for Noktah {
             // Buka: lebar dulu, tinggi menyusul (terasa melar).
             // Tutup: tinggi dulu, lebar menyusul (terasa mengempis).
             if inside {
+                if self.open.pos < 0.05 && self.pending_permissions.is_empty() {
+                    if let Some(p) = self.resolve_default_page() {
+                        self.current_page = p;
+                    }
+                }
                 self.open.set_spec(MORPH_OPEN_W);
                 self.open_h.set_spec(MORPH_OPEN_H);
             } else {
@@ -322,6 +359,36 @@ impl eframe::App for Noktah {
         self.hover
             .expanded
             .store(self.open.target > 0.5, Ordering::Relaxed);
+
+        if self.open.pos > 0.5 {
+            if self.pending_permissions.is_empty()
+                && ctx.input(|i| i.key_pressed(egui::Key::Escape))
+            {
+                self.close_panel();
+            } else {
+                let alt_idx = ctx.input(|i| {
+                    if !i.modifiers.alt {
+                        return None;
+                    }
+                    const KEYS: [egui::Key; 7] = [
+                        egui::Key::Num1,
+                        egui::Key::Num2,
+                        egui::Key::Num3,
+                        egui::Key::Num4,
+                        egui::Key::Num5,
+                        egui::Key::Num6,
+                        egui::Key::Num7,
+                    ];
+                    KEYS.iter().position(|k| i.key_pressed(*k))
+                });
+                if let Some(idx) = alt_idx {
+                    let active_pages = self.active_nav_pages();
+                    if let Some(target_page) = active_pages.get(idx).copied() {
+                        self.current_page = target_page;
+                    }
+                }
+            }
+        }
 
         // Saat idle, aplikasi tidur sampai 500 ms. Tanpa ini, frame pertama
         // animasi sudah melompat 50 ms ke depan — bentuknya "meletus" alih-alih
@@ -340,11 +407,12 @@ impl eframe::App for Noktah {
             .as_ref()
             .map(|(_, at)| at.elapsed().as_secs_f32() < 4.0)
             .unwrap_or(false);
+        let media_in_mini = self.show_media_in_mini();
         self.pill.target = if banner_active {
             340.0
-        } else if peek {
+        } else if peek && media_in_mini {
             self.settings.mini_width(true, true)
-        } else if self.media.active {
+        } else if media_in_mini {
             self.settings.mini_width(true, self.has_lyrics())
         } else if self.agent.active && self.settings.mini_agent {
             260.0
@@ -464,12 +532,16 @@ impl eframe::App for Noktah {
 
         // Perbarui tema aktif (opsi aksen dinamis dari album art ala Mochy-Music)
         let base_theme = Theme::new(self.settings.accent, self.settings.opacity);
-        self.theme =
-            if self.settings.dynamic_accent && self.media.active && self.album_accent.is_some() {
-                base_theme.with_accent(self.album_accent.unwrap())
-            } else {
-                base_theme
-            };
+        let use_album_accent = if self.open.pos < 0.35 {
+            self.show_media_in_mini()
+        } else {
+            self.media.active
+        };
+        self.theme = if self.settings.dynamic_accent && use_album_accent && self.album_accent.is_some() {
+            base_theme.with_accent(self.album_accent.unwrap())
+        } else {
+            base_theme
+        };
 
         // --- data -------------------------------------------------------
         let sys_needed = (self.open.pos > 0.2 && self.current_page == NotchPage::System)
@@ -498,6 +570,11 @@ impl eframe::App for Noktah {
 
         let now_ms = chrono::Local::now().timestamp_millis();
         self.poll_media(ctx);
+        if self.media.active && !self.media.playing {
+            self.media_paused_since.get_or_insert(now);
+        } else {
+            self.media_paused_since = None;
+        }
         self.poll_ai();
         self.poll_weather();
         self.poll_quota();

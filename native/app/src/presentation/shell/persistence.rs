@@ -34,6 +34,11 @@ impl Noktah {
         store::save("pomodoro.json", &self.pomodoro);
     }
 
+    pub fn touch_notes(&mut self) {
+        self.scratchpad.updated_at = chrono::Local::now().timestamp_millis();
+        self.notes_save_at = Some(Instant::now());
+    }
+
     /// Jumlah tugas yang belum selesai, untuk badge di tab Tugas.
     pub fn todo_open_count(&self) -> usize {
         self.todos.iter().filter(|t| !t.done).count()
@@ -46,9 +51,18 @@ impl Noktah {
                 self.save_at = None;
             }
         }
+        if let Some(at) = self.notes_save_at {
+            if now.duration_since(at) > Duration::from_millis(400) {
+                store::save("notes.json", &self.scratchpad);
+                self.notes_save_at = None;
+            }
+        }
     }
 
     pub(crate) fn check_reminders(&mut self, now_ms: i64) {
+        if self.is_focus_dnd_active() {
+            return;
+        }
         let mut changed = false;
         for task in reminders::missed_reminders(&self.todos, now_ms) {
             let pesan = format!("{}: {}", self.tr("tasks.reminder_title"), task.text);

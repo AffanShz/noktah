@@ -6,28 +6,13 @@ Legenda usaha: 🟢 beberapa jam · 🟡 beberapa hari · 🔴 butuh interop Win
 
 ---
 
-## Sudah selesai (`v1.0.0` – `v1.2.2`)
+## Sudah selesai (`v1.0.0` – `v1.3.0`)
 
 - **Aplikasi Rust native (`egui`/`eframe`)** — tanpa WebView/runtime tambahan, terbagi menjadi `noktah-core`, `noktah-native`, dan `noktah-hook`.
-- **Dynamic Island & Morphing** — kurva spring terkalibrasi ([MOTION.md](MOTION.md)), squircle, liquid ears, pill minimized elastis yang dapat dikustomisasi, serta hover intent.
-- **Dock 7-Halaman & Kustomisasi** — Home (SMTC + kuota Antigravity), Music (SMTC + lirik tersinkron multi-provider LRCLIB/BetterLyrics/NetEase/KuGou + seekable lyrics + aksen album dinamis), Focus (Pomodoro dinamis), Tasks (pengingat + auto-banner), System (CPU/RAM/cuaca Open-Meteo), Ask (AI chat streaming 6 provider dengan enkripsi DPAPI), dan Agent (maskot Noki + gaze tracking + `noktah-hook` universal untuk Claude Code, Antigravity, dan CLI).
-- **Jendela Setelan Mandiri** — secondary viewport native *always-on-top*, kontrol visibilitas tab dock (`nav_*`), salin konfigurasi hook instan, serta in-app update checker GitHub.
+- **Dynamic Island & Morphing** — kurva spring terkalibrasi ([MOTION.md](MOTION.md)), squircle, liquid ears, pill minimized elastis yang dapat dikustomisasi (termasuk `mini_idle_on_pause` saat audio dijeda), serta hover intent.
+- **Dock 7-Halaman & Kustomisasi** — Home (SMTC + Day Progress + kuota Antigravity), Music (SMTC + lirik tersinkron multi-provider LRCLIB/BetterLyrics/NetEase/KuGou + seekable lyrics + aksen album dinamis), Focus (Pomodoro dinamis + Focus DND + rekap 7 hari), Tasks (pengingat + auto-banner + Scratchpad autosave), System (CPU/RAM/cuaca Open-Meteo), Ask (AI chat streaming 6 provider + Quick AI Actions), dan Agent (maskot Noki + gaze tracking + `noktah-hook` universal).
+- **Jendela Setelan Mandiri & Harian (`v1.3.0`)** — halaman default saat dibuka + pintasan `Alt+1..7`/`Esc`, antrean izin multi-agent FIFO dengan nama workspace, serta One-Click Self-Updater dengan verifikasi SHA-256 terhadap `BACA-DULU.txt`.
 - **Stabilitas & Diagnostik (`v1.2.2`)** — perbaikan bug penulisan `tasks.json` tiap frame, gating idle wakeup & polling `sysinfo`, konfirmasi reset 2-klik beserta pembersihan penuh `store::wipe`, logger lokal berputar (`logs/noktah.log`) + penampil log di Settings, lokalisasi label dock/dialog, dan gate unit test di workflow rilis CI.
-
----
-
-## `v1.3.0` — Produktivitas Harian, Agent Queue & Self-Update
-
-*Fokus: memaksimalkan kenyamanan pemakaian harian dan alur kerja AI/developer memakai infrastruktur yang sudah ada.*
-
-| Item | Isi | Usaha |
-| --- | --- | --- |
-| **One-Click Self-Updater** | Unduh `.zip` rilis dari GitHub, verifikasi SHA-256 otomatis, ganti biner (`noktah-native.exe` + `noktah-hook.exe`), lalu restart mulus. | 🟡 |
-| **Multi-Agent Permission Queue** | Antrean FIFO permintaan izin untuk beberapa sesi agent paralel (`Claude Code` / `Antigravity`), lengkap dengan label workspace. | 🟡 |
-| **Halaman Default & Pintasan Cepat** | Pilih tab bawaan saat notch dibuka serta navigasi cepat keyboard (`Alt+1..7`, `Esc`). | 🟢 |
-| **Quick AI Actions** | Aksi kilat di tab Ask: terjemahkan clipboard (ID↔EN), ringkas teks, dan jelaskan error memakai kunci DPAPI aktif. | 🟢 |
-| **Scratchpad (Catatan Cepat)** | Area catatan instan dengan autosave ter-debounce di samping daftar tugas. | 🟢 |
-| **Focus DND & Rekap 7 Hari** | Mode senyap banner non-esensial selama sesi Fokus berlangsung dan statistik fokus mingguan. | 🟢 |
 
 ---
 

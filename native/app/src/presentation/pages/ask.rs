@@ -135,6 +135,19 @@ impl Noktah {
         const INPUT_H: f32 = 32.0;
         let list_h = (area.bottom() - ui.cursor().top() - INPUT_H - style::S1).max(20.0);
 
+        #[derive(Clone, Copy)]
+        enum QuickAction {
+            Translate,
+            Summarize,
+            Explain,
+            Clear,
+        }
+        let mut quick_action: Option<QuickAction> = None;
+        let lbl_translate = self.tr("ai.quick_translate").to_string();
+        let lbl_summarize = self.tr("ai.quick_summarize").to_string();
+        let lbl_explain = self.tr("ai.quick_explain").to_string();
+        let lbl_clear = self.tr("ai.quick_clear").to_string();
+
         egui::ScrollArea::vertical()
             .id_salt("ask_chat")
             .max_height(list_h)
@@ -144,6 +157,24 @@ impl Noktah {
             .show(ui, |ui| {
                 ui.set_width(area.width());
                 ui.spacing_mut().item_spacing.y = style::S1;
+
+                if !self.ai_busy {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.spacing_mut().item_spacing = egui::vec2(style::S1, style::S1);
+                        if widgets::chip_button(ui, &lbl_translate, false, &theme) {
+                            quick_action = Some(QuickAction::Translate);
+                        }
+                        if widgets::chip_button(ui, &lbl_summarize, false, &theme) {
+                            quick_action = Some(QuickAction::Summarize);
+                        }
+                        if widgets::chip_button(ui, &lbl_explain, false, &theme) {
+                            quick_action = Some(QuickAction::Explain);
+                        }
+                        if !self.chat.is_empty() && widgets::chip_button(ui, &lbl_clear, false, &theme) {
+                            quick_action = Some(QuickAction::Clear);
+                        }
+                    });
+                }
 
                 if self.chat.is_empty() {
                     // `.askbody` + `.spk`: lencana aksen, judul, keterangan.
@@ -232,6 +263,49 @@ impl Noktah {
                     ui.output_mut(|o| o.copied_text = teks);
                 }
             });
+
+        if let Some(act) = quick_action {
+            match act {
+                QuickAction::Clear => {
+                    self.chat.clear();
+                    self.save_chat();
+                }
+                QuickAction::Translate | QuickAction::Summarize | QuickAction::Explain => {
+                    let typed = self.chat_input.trim().to_string();
+                    let source = if !typed.is_empty() {
+                        self.chat_input.clear();
+                        Some(typed)
+                    } else {
+                        crate::infrastructure::os::read_clipboard_text()
+                            .map(|s| s.trim().to_string())
+                            .filter(|s| !s.is_empty())
+                    };
+                    match source {
+                        Some(src) => {
+                            let prompt = match act {
+                                QuickAction::Translate => format!(
+                                    "Translate the following text between Indonesian and English naturally and concisely:\n\n{src}"
+                                ),
+                                QuickAction::Summarize => format!(
+                                    "Summarize the key points of the following text concisely (respond in the same language as the input):\n\n{src}"
+                                ),
+                                QuickAction::Explain => format!(
+                                    "Explain the following text or code clearly and concisely (respond in the same language as the input):\n\n{src}"
+                                ),
+                                QuickAction::Clear => unreachable!(),
+                            };
+                            self.send_prompt(prompt);
+                        }
+                        None => {
+                            self.banner = Some((
+                                self.tr("ai.clipboard_empty").to_string(),
+                                std::time::Instant::now(),
+                            ));
+                        }
+                    }
+                }
+            }
+        }
 
         // ---- Baris tulis (`.askform`) ----
         ui.horizontal(|ui| {

@@ -65,6 +65,7 @@ pub(crate) fn wipe_in(dir: &std::path::Path) {
         "tasks.json",
         "chat.json",
         "pomodoro.json",
+        "notes.json",
         "settings-export.json",
         "secret.bin",
     ] {
@@ -95,6 +96,7 @@ mod tests {
             "tasks.json",
             "chat.json",
             "pomodoro.json",
+            "notes.json",
             "settings-export.json",
             "secret.bin",
         ] {
@@ -109,6 +111,7 @@ mod tests {
             "tasks.json",
             "chat.json",
             "pomodoro.json",
+            "notes.json",
             "settings-export.json",
             "secret.bin",
         ] {

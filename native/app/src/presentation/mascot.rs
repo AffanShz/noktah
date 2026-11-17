@@ -839,6 +839,7 @@ mod tests {
             tool_name: "Bash".into(),
             tool_input: serde_json::json!({}),
             suggestions: Vec::new(),
+            session_title: None,
         };
         let (appr_col, _, appr_style) =
             state.get_palette(&AgentStatus::AwaitingApproval(req), true);
@@ -880,6 +881,7 @@ mod tests {
             tool_name: "Bash".into(),
             tool_input: serde_json::json!({}),
             suggestions: Vec::new(),
+            session_title: None,
         };
 
         let statuses = vec![

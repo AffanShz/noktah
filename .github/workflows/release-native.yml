@@ -38,16 +38,18 @@ jobs:
         working-directory: native
         run: |
           $manifests = @("core/Cargo.toml", "app/Cargo.toml", "hook/Cargo.toml")
-          $versions = foreach ($m in $manifests) {
+          $versions = @(foreach ($m in $manifests) {
             $line = Get-Content $m | Where-Object { $_ -match '^version\s*=\s*"([^"]+)"' } | Select-Object -First 1
-            if (-not $line) { throw "Versi tidak ditemukan di $m" }
+            if (-not $line -or $line -notmatch '^version\s*=\s*"([^"]+)"') {
+              throw "Versi tidak ditemukan di $m"
+            }
             $Matches[1]
-          }
-          $unique = $versions | Select-Object -Unique
+          })
+          $unique = @($versions | Select-Object -Unique)
           if ($unique.Count -ne 1) {
             throw "Versi manifest tidak konsisten: $($versions -join ', ')"
           }
-          $ver = $unique[0]
+          $ver = [string]$unique[0]
           Write-Host "Versi manifest terverifikasi: $ver"
           if ($env:GITHUB_REF_TYPE -eq "tag" -and "v$ver" -ne $env:GITHUB_REF_NAME) {
             throw "Tag $env:GITHUB_REF_NAME tidak cocok dengan versi Cargo.toml v$ver"
