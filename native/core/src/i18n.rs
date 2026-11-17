@@ -44,6 +44,7 @@ pub const STRINGS: &[(&str, &str, &str)] = &[
     ("home.now", "Kini", "Now"),
     ("home.forecast", "Prakiraan", "Forecast"),
     ("home.open_music", "Buka Musik untuk memutar lagu", "Open Music to play a song"),
+    ("home.day_progress", "Hari ini", "Today"),
     //
     // Kuota Antigravity di Beranda. Kunci berakhiran `.err.` adalah **kunci
     // sebab**, bukan kalimat siap pakai: lapisan data (`quota.rs`) tidak tahu
@@ -97,6 +98,10 @@ pub const STRINGS: &[(&str, &str, &str)] = &[
     ("tasks.clear_done", "Hapus selesai", "Clear completed"),
     ("tasks.add_hint", "Tambah tugas, tekan Enter…", "Add task, press Enter…"),
     ("tasks.reminder_title", "Pengingat", "Reminder"),
+    ("tasks.mode_tasks", "Tugas", "Tasks"),
+    ("tasks.mode_notes", "Catatan", "Notes"),
+    ("tasks.notes_hint", "Tulis catatan cepat di sini (tersimpan otomatis)…", "Write quick notes here (autosaved)…"),
+    ("tasks.notes_copied", "Catatan disalin ke clipboard!", "Notes copied to clipboard!"),
     ("focus.title", "Fokus", "Focus"),
     ("focus.work", "Kerja", "Work"),
     ("focus.break", "Istirahat", "Break"),
@@ -125,6 +130,11 @@ pub const STRINGS: &[(&str, &str, &str)] = &[
     ("ai.stop", "Hentikan", "Stop"),
     ("ai.no_key", "Kunci API belum diatur", "API key not set"),
     ("ai.thinking", "Sedang berpikir…", "Thinking…"),
+    ("ai.quick_translate", "ID↔EN", "ID↔EN"),
+    ("ai.quick_summarize", "Ringkas", "Summarize"),
+    ("ai.quick_explain", "Jelaskan", "Explain"),
+    ("ai.quick_clear", "Bersihkan", "Clear"),
+    ("ai.clipboard_empty", "Ketik teks atau salin teks ke clipboard lebih dulu", "Type text or copy text to clipboard first"),
     ("settings.title", "Setelan", "Settings"),
     ("settings.general", "Umum", "General"),
     ("settings.display", "Layar", "Display"),
@@ -215,6 +225,13 @@ pub const STRINGS: &[(&str, &str, &str)] = &[
     ("settings.logs_copied", "Log diagnostik disalin ke clipboard!", "Diagnostic logs copied to clipboard!"),
     ("settings.logs_cleared", "Log diagnostik dibersihkan", "Diagnostic logs cleared"),
     ("settings.logs_empty", "Belum ada catatan log.", "No log entries yet."),
+    ("settings.default_page", "Halaman bawaan saat dibuka", "Default page on open"),
+    ("settings.default_page_desc", "Halaman yang tampil saat notch dibuka (pintasan Alt+1..7, Esc)", "Page shown when notch opens (shortcuts Alt+1..7, Esc)"),
+    ("settings.focus_dnd", "Jangan Ganggu saat Fokus", "Do Not Disturb during Focus"),
+    ("settings.focus_dnd_desc", "Tahan banner pengingat dan intip lagu selama sesi Fokus berjalan", "Hold reminder banners and track peek while Focus is running"),
+    ("settings.self_update", "Unduh & Pasang Otomatis", "Download & Install Update"),
+    ("settings.downloading_update", "Mengunduh & memverifikasi SHA-256…", "Downloading & verifying SHA-256…"),
+    ("settings.restart_to_apply", "Pasang & Mulai Ulang Sekarang", "Install & Restart Now"),
     ("notch.hint", "Arahkan kursor untuk membuka", "Hover to open"),
 ];
 

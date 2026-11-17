@@ -32,18 +32,86 @@ impl Noktah {
             }
         };
 
+        let lbl_tasks = self.tr("tasks.mode_tasks").to_string();
+        let lbl_notes = self.tr("tasks.mode_notes").to_string();
+        let mut next_mode = self.notes_mode;
+        let mut copy_notes = false;
+        let has_notes = !self.scratchpad.content.trim().is_empty();
+
         let _header_h = widgets::page_header(ui, &header_title, &theme, |ui| {
-            let teks = if self.todos.is_empty() {
-                String::new()
-            } else if open_count > 0 {
-                format!("{open_count} left")
-            } else {
-                "All done".to_string()
-            };
-            if !teks.is_empty() {
-                ui.label(style::cap(teks, theme.dim));
-            }
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 4.0;
+                if !next_mode {
+                    let teks = if self.todos.is_empty() {
+                        String::new()
+                    } else if open_count > 0 {
+                        format!("{open_count} left")
+                    } else {
+                        "All done".to_string()
+                    };
+                    if !teks.is_empty() {
+                        ui.label(style::cap(teks, theme.dim));
+                        ui.add_space(4.0);
+                    }
+                } else if has_notes && widgets::chip_button(ui, "Copy", false, &theme) {
+                    copy_notes = true;
+                }
+                if widgets::chip_button(ui, &lbl_tasks, !next_mode, &theme) {
+                    next_mode = false;
+                }
+                if widgets::chip_button(ui, &lbl_notes, next_mode, &theme) {
+                    next_mode = true;
+                }
+            });
         });
+
+        self.notes_mode = next_mode;
+        if copy_notes {
+            ui.output_mut(|o| o.copied_text = self.scratchpad.content.clone());
+            self.banner = Some((
+                self.tr("tasks.notes_copied").to_string(),
+                std::time::Instant::now(),
+            ));
+        }
+
+        if self.notes_mode {
+            let notes_h = (area.bottom() - ui.cursor().top()).max(32.0);
+            let box_rect = Rect::from_min_size(ui.cursor().min, egui::vec2(area.width(), notes_h));
+            ui.painter()
+                .rect_filled(box_rect, Rounding::same(style::R_CONTROL), theme.surface);
+
+            let hint = self.tr("tasks.notes_hint").to_string();
+            let mut changed = false;
+
+            ui.add_space(6.0);
+            let scroll_h = (notes_h - 12.0).max(20.0);
+            egui::ScrollArea::vertical()
+                .id_salt("page_notes_scroll")
+                .max_height(scroll_h)
+                .auto_shrink([false, false])
+                .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden)
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.add_space(10.0);
+                        let resp = ui.add(
+                            egui::TextEdit::multiline(&mut self.scratchpad.content)
+                                .id_salt("tasks_scratchpad_input")
+                                .hint_text(hint)
+                                .desired_width((area.width() - 20.0).max(60.0))
+                                .desired_rows(4)
+                                .font(egui::FontId::proportional(style::T_BODY))
+                                .text_color(theme.ink)
+                                .frame(false),
+                        );
+                        changed = resp.changed();
+                    });
+                });
+
+            if changed {
+                self.touch_notes();
+            }
+            return;
+        }
 
         // ---- Kolom input (`.field` 32 px, radius 14) ----
         const FIELD_H: f32 = 32.0;

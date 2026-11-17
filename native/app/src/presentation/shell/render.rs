@@ -457,6 +457,12 @@ impl Noktah {
                                 None
                             }
                         }),
+                        pending_approval_count: self.pending_permissions.len(),
+                        focus_dnd_rem: if self.is_focus_dnd_active() {
+                            Some(self.pomodoro.remaining_secs)
+                        } else {
+                            None
+                        },
                     };
                     // Klip aura dilonggarkan 6 px ke bawah saja (rect tata
                     // letak tetap sama supaya isi baris tidak bergeser).

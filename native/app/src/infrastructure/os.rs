@@ -509,3 +509,50 @@ pub fn animations_enabled() -> bool {
 pub fn animations_enabled() -> bool {
     true
 }
+
+/// Membaca teks Unicode dari clipboard Windows secara aman dan terbatas.
+#[cfg(windows)]
+pub fn read_clipboard_text() -> Option<String> {
+    use windows::Win32::Foundation::{HANDLE, HGLOBAL};
+    use windows::Win32::System::DataExchange::{CloseClipboard, GetClipboardData, OpenClipboard};
+    use windows::Win32::System::Memory::{GlobalLock, GlobalUnlock};
+
+    const CF_UNICODETEXT_FMT: u32 = 13;
+    const MAX_CHARS: usize = 1_000_000;
+
+    unsafe {
+        if OpenClipboard(None).is_err() {
+            return None;
+        }
+        let result = (|| -> Option<String> {
+            let handle: HANDLE = GetClipboardData(CF_UNICODETEXT_FMT).ok()?;
+            if handle.is_invalid() || handle.0.is_null() {
+                return None;
+            }
+            let hglobal = HGLOBAL(handle.0);
+            let ptr = GlobalLock(hglobal) as *const u16;
+            if ptr.is_null() {
+                return None;
+            }
+            let mut len = 0usize;
+            while len < MAX_CHARS && *ptr.add(len) != 0 {
+                len += 1;
+            }
+            let slice = std::slice::from_raw_parts(ptr, len);
+            let text = String::from_utf16_lossy(slice);
+            let _ = GlobalUnlock(hglobal);
+            if text.trim().is_empty() {
+                None
+            } else {
+                Some(text)
+            }
+        })();
+        let _ = CloseClipboard();
+        result
+    }
+}
+
+#[cfg(not(windows))]
+pub fn read_clipboard_text() -> Option<String> {
+    None
+}

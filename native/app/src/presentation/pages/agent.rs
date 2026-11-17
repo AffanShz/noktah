@@ -18,28 +18,25 @@ impl Noktah {
         let key_n = ui.input(|i| i.key_pressed(egui::Key::N));
 
         if is_alt && key_y {
-            if let Some((_, responder)) = self.pending_permission.take() {
-                let _ = responder.send(PermissionDecision {
+            self.resolve_front_permission(
+                PermissionDecision {
                     behavior: "allow".into(),
                     message: None,
                     updated_input: None,
-                });
-                self.agent.status = AgentStatus::PromptSubmitted {
-                    prompt: "Approved by user via Alt+Y".into(),
-                    timestamp: now_ms,
-                };
-                self.close_panel();
-            }
+                },
+                Some("Approved by user via Alt+Y"),
+                now_ms,
+            );
         } else if is_alt && key_n {
-            if let Some((_, responder)) = self.pending_permission.take() {
-                let _ = responder.send(PermissionDecision {
+            self.resolve_front_permission(
+                PermissionDecision {
                     behavior: "deny".into(),
                     message: Some("Rejected via Noktah Alt+N".into()),
                     updated_input: None,
-                });
-                self.agent.status = AgentStatus::Idle;
-                self.close_panel();
-            }
+                },
+                None,
+                now_ms,
+            );
         }
 
         // Buffer padding aman: 8px kiri-kanan, 4px atas, 6px bawah agar tidak terpotong
@@ -138,15 +135,27 @@ impl Noktah {
                 ui.vertical(|ui| {
                     match &self.agent.status {
                         AgentStatus::AwaitingApproval(req) => {
+                            let queue_len = self.pending_permissions.len();
+                            let header_lbl = if queue_len > 1 {
+                                format!("PERMISSION REQUIRED (1/{queue_len})")
+                            } else {
+                                "PERMISSION REQUIRED".to_string()
+                            };
                             ui.horizontal(|ui| {
                                 ui.label(
-                                    egui::RichText::new("PERMISSION REQUIRED")
+                                    egui::RichText::new(header_lbl)
                                         .font(FontId::proportional(10.5))
                                         .strong()
                                         .color(Color32::from_rgb(245, 158, 11)),
                                 );
+                                let ses_info = req
+                                    .session_title
+                                    .as_deref()
+                                    .filter(|s| !s.is_empty())
+                                    .map(|s| format!(" • {s}"))
+                                    .unwrap_or_default();
                                 ui.label(
-                                    egui::RichText::new(format!("• Tool: {}", req.tool_name))
+                                    egui::RichText::new(format!("• Tool: {}{}", req.tool_name, ses_info))
                                         .font(FontId::monospace(10.5))
                                         .color(Color32::from_rgb(226, 232, 240)),
                                 );
@@ -273,41 +282,35 @@ impl Noktah {
 
             // Eksekusi aksi approval di luar borrow
             if allow_clicked {
-                if let Some((_, responder)) = self.pending_permission.take() {
-                    let _ = responder.send(PermissionDecision {
+                self.resolve_front_permission(
+                    PermissionDecision {
                         behavior: "allow".into(),
                         message: None,
                         updated_input: None,
-                    });
-                    self.agent.status = AgentStatus::PromptSubmitted {
-                        prompt: "Allowed by user".into(),
-                        timestamp: now_ms,
-                    };
-                    self.close_panel();
-                }
+                    },
+                    Some("Allowed by user"),
+                    now_ms,
+                );
             } else if always_clicked {
-                if let Some((_, responder)) = self.pending_permission.take() {
-                    let _ = responder.send(PermissionDecision {
+                self.resolve_front_permission(
+                    PermissionDecision {
                         behavior: "allow".into(),
                         message: None,
                         updated_input: None,
-                    });
-                    self.agent.status = AgentStatus::PromptSubmitted {
-                        prompt: "Always allowed by user".into(),
-                        timestamp: now_ms,
-                    };
-                    self.close_panel();
-                }
+                    },
+                    Some("Always allowed by user"),
+                    now_ms,
+                );
             } else if deny_clicked {
-                if let Some((_, responder)) = self.pending_permission.take() {
-                    let _ = responder.send(PermissionDecision {
+                self.resolve_front_permission(
+                    PermissionDecision {
                         behavior: "deny".into(),
                         message: Some("Rejected via Noktah UI".into()),
                         updated_input: None,
-                    });
-                    self.agent.status = AgentStatus::Idle;
-                    self.close_panel();
-                }
+                    },
+                    None,
+                    now_ms,
+                );
             }
 
             ui.add_space(4.0);

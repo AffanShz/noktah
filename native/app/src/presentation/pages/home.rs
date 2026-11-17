@@ -34,6 +34,7 @@
 use crate::app::{Noktah, NotchPage};
 use crate::presentation::theme::Theme;
 use crate::presentation::{icons::Icon, style, theme, widgets};
+use chrono::Timelike;
 use eframe::egui::{self, Color32, Rect, Rounding, Sense, Stroke};
 use noktah_core::format;
 
@@ -228,6 +229,8 @@ impl Noktah {
         }
 
         // ---- Kolom teks ----
+        let now_local = chrono::Local::now();
+        let day_pct = format::day_progress_pct(now_local.hour(), now_local.minute());
         let teks_x = art_rect.right() + style::S2;
         let teks_w = (rect.right() - TRIO_W - style::S2 - teks_x).max(40.0);
         let (judul, sub, ketiga) = if ada {
@@ -260,10 +263,19 @@ impl Noktah {
             };
             (judul, sub, ketiga)
         } else {
+            let open_tasks = self.todo_open_count();
+            let ketiga = if open_tasks > 0 {
+                format!(
+                    "{} {day_pct}% · {open_tasks} tasks",
+                    self.tr("home.day_progress")
+                )
+            } else {
+                format!("{} {day_pct}%", self.tr("home.day_progress"))
+            };
             (
                 self.tr("music.nothing").to_string(),
                 self.tr("home.open_music").to_string(),
-                String::new(),
+                ketiga,
             )
         };
 
@@ -291,6 +303,7 @@ impl Noktah {
         );
 
         if !ketiga.is_empty() {
+            let ketiga = widgets::ellipsis_sized(ui, &ketiga, teks_w, style::T_MICRO);
             ui.painter().text(
                 egui::pos2(teks_x, atas + 31.0),
                 egui::Align2::LEFT_TOP,
@@ -333,6 +346,20 @@ impl Noktah {
         {
             self.current_page = NotchPage::Music;
         }
+
+        // Subtle 2 px day-progress hairline along the bottom edge (zero extra layout height).
+        let bar_rect = Rect::from_min_max(
+            egui::pos2(rect.left(), rect.bottom() - 2.0),
+            egui::pos2(rect.right(), rect.bottom()),
+        );
+        ui.painter()
+            .rect_filled(bar_rect, Rounding::same(1.0), Color32::from_white_alpha(20));
+        let fill_w = (bar_rect.width() * (day_pct as f32 / 100.0)).max(2.0);
+        ui.painter().rect_filled(
+            Rect::from_min_size(bar_rect.min, egui::vec2(fill_w, 2.0)),
+            Rounding::same(1.0),
+            Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 140),
+        );
     }
 
     /* ------------------------------------------------------------ kuota */

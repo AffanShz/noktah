@@ -10,6 +10,12 @@ pub fn clock_text(hour: u32, minute: u32) -> String {
     format!("{}:{}", pad(hour), pad(minute))
 }
 
+/// Persentase perjalanan hari lokal (0..=100) dari jam dan menit saat ini.
+pub fn day_progress_pct(hour: u32, minute: u32) -> u8 {
+    let mins = (hour.min(23) * 60 + minute.min(59)) as f32;
+    ((mins / 1440.0) * 100.0).round().clamp(0.0, 100.0) as u8
+}
+
 /// `mm:ss`, dipakai untuk posisi dan durasi lagu.
 pub fn mmss(total_seconds: i64) -> String {
     let s = total_seconds.max(0);
@@ -212,5 +218,12 @@ mod tests {
         let label = due_label(now + 3_600_000, now);
         assert_eq!(label.len(), 5);
         assert!(label.contains(':'));
+    }
+
+    #[test]
+    fn persentase_hari_akurat() {
+        assert_eq!(day_progress_pct(0, 0), 0);
+        assert_eq!(day_progress_pct(12, 0), 50);
+        assert_eq!(day_progress_pct(23, 59), 100);
     }
 }

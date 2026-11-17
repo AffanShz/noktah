@@ -30,6 +30,15 @@ impl Todo {
     }
 }
 
+/// Catatan cepat (scratchpad) persisten dengan stempel waktu pembaruan terakhir.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct Scratchpad {
+    #[serde(default)]
+    pub content: String,
+    #[serde(default)]
+    pub updated_at: i64,
+}
+
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum Role {
@@ -160,6 +169,9 @@ pub struct PomodoroState {
     pub sessions_today: u32,
     #[serde(default)]
     pub last_date: String,
+    /// Riwayat jumlah sesi selesai harian (maks 7 hari terakhir: `(YYYY-MM-DD, count)`).
+    #[serde(default)]
+    pub history: Vec<(String, u32)>,
 }
 
 impl Default for PomodoroState {
@@ -170,6 +182,7 @@ impl Default for PomodoroState {
             remaining_secs: 25 * 60,
             sessions_today: 0,
             last_date: String::new(),
+            history: Vec::new(),
         }
     }
 }
@@ -215,9 +228,19 @@ impl PomodoroState {
         false
     }
 
-    /// Reset counter sesi harian saat tanggal kalender berganti.
+    /// Reset counter sesi harian saat tanggal kalender berganti sambil
+    /// mengarsipkan total sesi hari sebelumnya ke riwayat 7 hari.
     pub fn check_daily_reset(&mut self, today: &str) -> bool {
         if !self.last_date.is_empty() && self.last_date != today {
+            if let Some(entry) = self.history.iter_mut().find(|(d, _)| d == &self.last_date) {
+                entry.1 = self.sessions_today;
+            } else {
+                self.history.push((self.last_date.clone(), self.sessions_today));
+            }
+            if self.history.len() > 7 {
+                let drop_n = self.history.len() - 7;
+                self.history.drain(0..drop_n);
+            }
             self.sessions_today = 0;
             self.last_date = today.to_string();
             true
@@ -227,6 +250,12 @@ impl PomodoroState {
         } else {
             false
         }
+    }
+
+    /// Total sesi fokus selesai dalam jendela 7 hari terakhir (termasuk hari ini).
+    pub fn weekly_total(&self) -> u32 {
+        let past: u32 = self.history.iter().rev().take(6).map(|(_, n)| *n).sum();
+        self.sessions_today.saturating_add(past)
     }
 }
 
@@ -308,6 +337,8 @@ pub struct PermissionRequest {
     pub tool_input: serde_json::Value,
     #[serde(default)]
     pub suggestions: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_title: Option<String>,
 }
 
 /// Status lifecycle agent Claude Code.
@@ -513,6 +544,7 @@ mod tests {
             tool_name: "Bash".into(),
             tool_input: serde_json::json!({"command": "cargo test"}),
             suggestions: vec!["Bash(cargo test)".into()],
+            session_title: Some("noktah-workspace".into()),
         };
         let status = AgentStatus::AwaitingApproval(req);
         let raw = serde_json::to_string(&status).unwrap();
@@ -584,9 +616,34 @@ mod tests {
         assert!(!p.check_daily_reset("2026-11-15"));
         assert_eq!(p.sessions_today, 4);
 
-        // Hari baru mereset sessions_today ke 0
+        // Hari baru mereset sessions_today ke 0 dan menyimpan riwayat
         assert!(p.check_daily_reset("2026-11-16"));
         assert_eq!(p.sessions_today, 0);
         assert_eq!(p.last_date, "2026-11-16");
+        assert_eq!(p.history, vec![("2026-11-15".to_string(), 4)]);
+        assert_eq!(p.weekly_total(), 4);
+    }
+
+    #[test]
+    fn riwayat_fokus_7_hari_dan_scratchpad_serde() {
+        let mut p = PomodoroState::default();
+        p.last_date = "2026-11-10".into();
+        for day in 11..=18 {
+            p.sessions_today = day - 1;
+            assert!(p.check_daily_reset(&format!("2026-11-{day:02}")));
+        }
+        assert_eq!(p.history.len(), 7);
+        assert_eq!(p.history[0].0, "2026-11-11");
+        p.sessions_today = 2;
+        // 6 hari sebelumnya (12..=17) + hari ini (2)
+        assert_eq!(p.weekly_total(), 12 + 13 + 14 + 15 + 16 + 17 + 2);
+
+        let note = Scratchpad {
+            content: "Catatan cepat".into(),
+            updated_at: 1_700_000_000_000,
+        };
+        let raw = serde_json::to_string(&note).unwrap();
+        let back: Scratchpad = serde_json::from_str(&raw).unwrap();
+        assert_eq!(note, back);
     }
 }

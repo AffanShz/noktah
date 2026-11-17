@@ -1234,4 +1234,81 @@ mod tests {
         app.media.playing = true;
         assert!(app.show_media_in_mini());
     }
+
+    #[test]
+    fn antrean_fifo_izin_multi_agent_berurutan() {
+        use crate::app::{Noktah, NotchPage, QueuedPermission};
+        use noktah_core::model::{AgentStatus, PermissionDecision, PermissionRequest};
+        use std::sync::mpsc::sync_channel;
+
+        let ctx = egui::Context::default();
+        let hover = crate::infrastructure::platform::Hover::new(false);
+        let mut app = Noktah::new("test".to_string(), hover, &ctx);
+        app.settings = noktah_core::Settings::default();
+
+        let (tx1, rx1) = sync_channel::<PermissionDecision>(1);
+        let (tx2, rx2) = sync_channel::<PermissionDecision>(1);
+
+        let req1 = PermissionRequest {
+            request_id: "req-1".into(),
+            tool_name: "Bash".into(),
+            tool_input: serde_json::json!({"command": "cargo test"}),
+            suggestions: vec![],
+            session_title: Some("repo-a".into()),
+        };
+        let req2 = PermissionRequest {
+            request_id: "req-2".into(),
+            tool_name: "Write".into(),
+            tool_input: serde_json::json!({"file_path": "src/lib.rs"}),
+            suggestions: vec![],
+            session_title: Some("repo-b".into()),
+        };
+
+        app.pending_permissions.push_back(QueuedPermission {
+            request: req1.clone(),
+            responder: tx1,
+        });
+        app.pending_permissions.push_back(QueuedPermission {
+            request: req2,
+            responder: tx2,
+        });
+
+        app.open.target = 1.0;
+        app.open.pos = 1.0;
+        app.current_page = NotchPage::Agent;
+        app.agent.status = AgentStatus::AwaitingApproval(req1);
+
+        // Selesaikan permintaan pertama: antrean berikutnya dipromosikan dan panel tetap terbuka.
+        app.resolve_front_permission(
+            PermissionDecision {
+                behavior: "allow".into(),
+                message: None,
+                updated_input: None,
+            },
+            Some("Approved: Bash"),
+            1_000,
+        );
+        assert_eq!(rx1.try_recv().unwrap().behavior, "allow");
+        assert_eq!(app.pending_permissions.len(), 1);
+        assert_eq!(app.open.target, 1.0);
+        assert!(matches!(
+            &app.agent.status,
+            AgentStatus::AwaitingApproval(r)
+                if r.request_id == "req-2" && r.session_title.as_deref() == Some("repo-b")
+        ));
+
+        // Selesaikan permintaan kedua: antrean kosong dan panel menutup.
+        app.resolve_front_permission(
+            PermissionDecision {
+                behavior: "deny".into(),
+                message: Some("No".into()),
+                updated_input: None,
+            },
+            None,
+            2_000,
+        );
+        assert_eq!(rx2.try_recv().unwrap().behavior, "deny");
+        assert!(app.pending_permissions.is_empty());
+        assert_eq!(app.open.target, 0.0);
+    }
 }

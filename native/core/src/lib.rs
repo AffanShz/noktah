@@ -13,6 +13,6 @@ pub mod reminders;
 pub mod settings;
 
 pub use model::{
-    ChatMessage, MediaState, PomodoroMode, PomodoroState, Todo, WaterState, WeatherNow,
+    ChatMessage, MediaState, PomodoroMode, PomodoroState, Scratchpad, Todo, WaterState, WeatherNow,
 };
-pub use settings::{Accent, Lang, MiniPreset, Provider, Settings};
+pub use settings::{Accent, DefaultPage, Lang, MiniPreset, Provider, Settings};

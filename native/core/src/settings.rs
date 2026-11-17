@@ -220,6 +220,59 @@ fn default_hover_delay() -> u32 {
     240
 }
 
+/// Pilihan halaman bawaan saat panel notch dibuka.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DefaultPage {
+    LastOpened,
+    Home,
+    Music,
+    Pomodoro,
+    Tasks,
+    System,
+    Ask,
+    Agent,
+}
+
+impl Default for DefaultPage {
+    fn default() -> Self {
+        DefaultPage::LastOpened
+    }
+}
+
+impl DefaultPage {
+    pub const ALL: [DefaultPage; 8] = [
+        DefaultPage::LastOpened,
+        DefaultPage::Home,
+        DefaultPage::Music,
+        DefaultPage::Pomodoro,
+        DefaultPage::Tasks,
+        DefaultPage::System,
+        DefaultPage::Ask,
+        DefaultPage::Agent,
+    ];
+
+    pub fn label(&self, lang: Lang) -> &'static str {
+        match (self, lang) {
+            (DefaultPage::LastOpened, Lang::Id) => "Terakhir dibuka",
+            (DefaultPage::LastOpened, Lang::En) => "Last opened",
+            (DefaultPage::Home, Lang::Id) => "Beranda",
+            (DefaultPage::Home, Lang::En) => "Home",
+            (DefaultPage::Music, Lang::Id) => "Musik",
+            (DefaultPage::Music, Lang::En) => "Music",
+            (DefaultPage::Pomodoro, Lang::Id) => "Fokus",
+            (DefaultPage::Pomodoro, Lang::En) => "Focus",
+            (DefaultPage::Tasks, Lang::Id) => "Tugas",
+            (DefaultPage::Tasks, Lang::En) => "Tasks",
+            (DefaultPage::System, Lang::Id) => "Sistem",
+            (DefaultPage::System, Lang::En) => "System",
+            (DefaultPage::Ask, Lang::Id) => "Tanya AI",
+            (DefaultPage::Ask, Lang::En) => "Ask AI",
+            (DefaultPage::Agent, _) => "Agent",
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]
 pub struct Settings {
@@ -287,6 +340,12 @@ pub struct Settings {
     /// tampilan lagu terakhir selama sesi SMTC aktif.
     #[serde(default = "default_true")]
     pub mini_idle_on_pause: bool,
+    /// Halaman bawaan yang ditampilkan setiap kali panel notch dibuka.
+    #[serde(default)]
+    pub default_page: DefaultPage,
+    /// Tahan banner non-esensial saat timer Fokus sedang berjalan.
+    #[serde(default = "default_true")]
+    pub focus_dnd: bool,
     pub start_with_windows: bool,
     /// Durasi pomodoro dalam menit.
     pub focus_minutes: u32,
@@ -346,6 +405,8 @@ impl Default for Settings {
             mini_ram: true,
             mini_agent: true,
             mini_idle_on_pause: true,
+            default_page: DefaultPage::LastOpened,
+            focus_dnd: true,
             start_with_windows: false,
             focus_minutes: 25,
             break_minutes: 5,
@@ -802,5 +863,21 @@ mod tests {
         assert!(!s.show_media_in_mini(false, false));
         assert!(s.show_media_in_mini(true, true));
         assert!(s.show_media_in_mini(true, false));
+    }
+
+    #[test]
+    fn default_page_dan_focus_dnd_bawaan() {
+        let s = Settings::default();
+        assert_eq!(s.default_page, DefaultPage::LastOpened);
+        assert!(s.focus_dnd);
+
+        let raw = serde_json::to_string(&DefaultPage::Pomodoro).unwrap();
+        assert_eq!(raw, "\"pomodoro\"");
+        let back: DefaultPage = serde_json::from_str(&raw).unwrap();
+        assert_eq!(back, DefaultPage::Pomodoro);
+
+        let dari_kosong: Settings = serde_json::from_str("{}").unwrap();
+        assert_eq!(dari_kosong.default_page, DefaultPage::LastOpened);
+        assert!(dari_kosong.focus_dnd);
     }
 }

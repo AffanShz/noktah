@@ -324,9 +324,9 @@ impl eframe::App for Noktah {
             }
         }
 
-        // Guard anti-stuck: jika cursor di luar dan tidak ada pending approval,
+        // Guard anti-stuck: jika cursor di luar dan tidak ada antrean approval,
         // panel wajib menutup kembali ke minimize.
-        if !inside && self.pending_permission.is_none() && self.open.target > 0.0 {
+        if !inside && self.pending_permissions.is_empty() && self.open.target > 0.0 {
             self.open.target = 0.0;
             self.open_h.target = 0.0;
             self.hovered = false;
@@ -344,6 +344,11 @@ impl eframe::App for Noktah {
             // Buka: lebar dulu, tinggi menyusul (terasa melar).
             // Tutup: tinggi dulu, lebar menyusul (terasa mengempis).
             if inside {
+                if self.open.pos < 0.05 && self.pending_permissions.is_empty() {
+                    if let Some(p) = self.resolve_default_page() {
+                        self.current_page = p;
+                    }
+                }
                 self.open.set_spec(MORPH_OPEN_W);
                 self.open_h.set_spec(MORPH_OPEN_H);
             } else {
@@ -354,6 +359,36 @@ impl eframe::App for Noktah {
         self.hover
             .expanded
             .store(self.open.target > 0.5, Ordering::Relaxed);
+
+        if self.open.pos > 0.5 {
+            if self.pending_permissions.is_empty()
+                && ctx.input(|i| i.key_pressed(egui::Key::Escape))
+            {
+                self.close_panel();
+            } else {
+                let alt_idx = ctx.input(|i| {
+                    if !i.modifiers.alt {
+                        return None;
+                    }
+                    const KEYS: [egui::Key; 7] = [
+                        egui::Key::Num1,
+                        egui::Key::Num2,
+                        egui::Key::Num3,
+                        egui::Key::Num4,
+                        egui::Key::Num5,
+                        egui::Key::Num6,
+                        egui::Key::Num7,
+                    ];
+                    KEYS.iter().position(|k| i.key_pressed(*k))
+                });
+                if let Some(idx) = alt_idx {
+                    let active_pages = self.active_nav_pages();
+                    if let Some(target_page) = active_pages.get(idx).copied() {
+                        self.current_page = target_page;
+                    }
+                }
+            }
+        }
 
         // Saat idle, aplikasi tidur sampai 500 ms. Tanpa ini, frame pertama
         // animasi sudah melompat 50 ms ke depan — bentuknya "meletus" alih-alih

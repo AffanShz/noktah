@@ -45,6 +45,7 @@ pub enum IpcEvent {
         tool_name: String,
         tool_input: serde_json::Value,
         suggestions: Vec<String>,
+        session_title: Option<String>,
         responder: SyncSender<PermissionDecision>,
     },
     PermissionCanceled(String),
@@ -260,12 +261,18 @@ fn handle_client_connection(
             .permission_suggestions
             .clone()
             .unwrap_or_default();
+        let session_title = hook_payload
+            .session_title
+            .clone()
+            .filter(|s| !s.trim().is_empty())
+            .or_else(|| hook_payload.session_id.clone().filter(|s| !s.trim().is_empty()));
 
         let _ = tx.send(IpcEvent::PermissionRequest {
             request_id: request_id.clone(),
             tool_name,
             tool_input,
             suggestions,
+            session_title,
             responder: resp_tx,
         });
         ctx.request_repaint();
