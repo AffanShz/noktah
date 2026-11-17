@@ -76,12 +76,20 @@ pub fn check_github() -> UpdateStatus {
         .call()
     {
         Ok(r) => r,
-        Err(e) => return UpdateStatus::Error(format!("Gagal menghubungi GitHub: {e}")),
+        Err(e) => {
+            let msg = format!("Gagal menghubungi GitHub: {e}");
+            crate::infrastructure::logger::warn("updater", &msg);
+            return UpdateStatus::Error(msg);
+        }
     };
 
     let release: ReleaseInfo = match resp.into_json() {
         Ok(rel) => rel,
-        Err(e) => return UpdateStatus::Error(format!("Gagal mengurai respons: {e}")),
+        Err(e) => {
+            let msg = format!("Gagal mengurai respons: {e}");
+            crate::infrastructure::logger::warn("updater", &msg);
+            return UpdateStatus::Error(msg);
+        }
     };
 
     let current = env!("CARGO_PKG_VERSION");
@@ -89,6 +97,7 @@ pub fn check_github() -> UpdateStatus {
 
     if is_newer_version(remote_ver, current) {
         let tag = release.tag_name;
+        crate::infrastructure::logger::info("updater", &format!("Update available: {tag}"));
         let name = release.name.unwrap_or_else(|| format!("Rilis {tag}"));
         UpdateStatus::UpdateAvailable {
             version: tag,
