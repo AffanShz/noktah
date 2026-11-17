@@ -11,6 +11,8 @@ pub struct MiniCtx<'a> {
     pub theme: &'a Theme,
     pub settings: &'a Settings,
     pub media: &'a MediaState,
+    /// Apakah baris minimized menampilkan mode pemutar musik (bukan mode idle).
+    pub show_media: bool,
     pub lyric: Option<&'a str>,
     pub prev_lyric: Option<&'a str>,
     pub lyric_trans: f32,
@@ -295,8 +297,9 @@ pub fn draw(painter: &Painter, rect: Rect, ctx: &MiniCtx) {
     let theme = ctx.theme;
     let cy = rect.center().y;
 
-    // Jika ada banner HUD aktif atau tanpa lagu: tampilkan pill minimal / HUD banner
-    if ctx.banner.is_some() || !ctx.media.active {
+    // Jika ada banner HUD aktif atau mode musik sedang disembunyikan (idle / pause):
+    // tampilkan pill minimal / HUD banner.
+    if ctx.banner.is_some() || !ctx.show_media {
         draw_minimal_pill(painter, rect, ctx);
         return;
     }

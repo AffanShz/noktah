@@ -420,6 +420,7 @@ impl Noktah {
                         theme: &self.theme.with_opacity_multiplier(mini_alpha),
                         settings: &self.settings,
                         media: &self.media,
+                        show_media: self.show_media_in_mini(),
                         lyric,
                         prev_lyric: self.mini_prev_lyric.as_deref(),
                         lyric_trans,

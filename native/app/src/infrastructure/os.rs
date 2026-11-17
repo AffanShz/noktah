@@ -426,21 +426,51 @@ pub fn spawn_tray_and_hotkey(_ctx: egui::Context) {}
 #[cfg(windows)]
 pub fn claim_single_instance() -> bool {
     use windows::core::PCWSTR;
-    use windows::Win32::Foundation::{GetLastError, ERROR_ALREADY_EXISTS};
+    use windows::Win32::Foundation::{
+        CloseHandle, GetLastError, ERROR_ALREADY_EXISTS, LPARAM, WPARAM,
+    };
     use windows::Win32::System::Threading::CreateMutexW;
+    use windows::Win32::UI::WindowsAndMessaging::{FindWindowW, PostMessageW, WM_COMMAND};
 
     let nama: Vec<u16> = "Local\\NoktahSingleInstance\0".encode_utf16().collect();
 
     unsafe {
         match CreateMutexW(None, true, PCWSTR(nama.as_ptr())) {
             Ok(handle) => {
-                if GetLastError() == ERROR_ALREADY_EXISTS {
-                    false
-                } else {
+                if GetLastError() != ERROR_ALREADY_EXISTS {
                     // Handle sengaja tidak ditutup: harus hidup selama proses.
-                    std::mem::forget(handle);
-                    true
+                    let _ = handle;
+                    return true;
                 }
+                let _ = CloseHandle(handle);
+
+                // Jika ada jendela tray Noktah di sesi desktop saat ini, minta keluar
+                // dengan rapi supaya instance baru dapat langsung menggantikannya.
+                if let Ok(tray_hwnd) = FindWindowW(
+                    windows::core::w!("NoktahTray"),
+                    windows::core::w!("NoktahTrayHost"),
+                ) {
+                    if !tray_hwnd.0.is_null() {
+                        let _ = PostMessageW(tray_hwnd, WM_COMMAND, WPARAM(1004), LPARAM(0));
+                        for _ in 0..15 {
+                            std::thread::sleep(std::time::Duration::from_millis(100));
+                            if let Ok(new_handle) = CreateMutexW(None, true, PCWSTR(nama.as_ptr()))
+                            {
+                                if GetLastError() != ERROR_ALREADY_EXISTS {
+                                    let _ = new_handle;
+                                    return true;
+                                }
+                                let _ = CloseHandle(new_handle);
+                            }
+                        }
+                    }
+                }
+
+                crate::infrastructure::logger::warn(
+                    "app",
+                    "Another Noktah instance is already active; exiting",
+                );
+                false
             }
             Err(_) => true,
         }

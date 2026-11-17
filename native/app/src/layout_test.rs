@@ -1208,4 +1208,30 @@ mod tests {
             app.next_wake(now_ms)
         );
     }
+
+    #[test]
+    fn pill_kembali_ke_idle_saat_musik_dipause_sesuai_setelan() {
+        use crate::app::Noktah;
+        use std::time::{Duration, Instant};
+        let ctx = egui::Context::default();
+        let hover = crate::infrastructure::platform::Hover::new(false);
+        let mut app = Noktah::new("test".to_string(), hover, &ctx);
+
+        app.settings = noktah_core::Settings::default();
+        app.media.active = true;
+        app.media.playing = false;
+        app.media_paused_since = Some(Instant::now() - Duration::from_secs(1));
+
+        // Bawaan true: setelah masa jeda singkat terlewati, pill kembali ke mode idle
+        assert!(!app.show_media_in_mini());
+
+        // Jika setelan dimatikan: tetap pertahankan state musik pada pill saat pause
+        app.settings.mini_idle_on_pause = false;
+        assert!(app.show_media_in_mini());
+
+        // Saat musik kembali diputar: mode musik tetap tampil meski setelan idle aktif
+        app.settings.mini_idle_on_pause = true;
+        app.media.playing = true;
+        assert!(app.show_media_in_mini());
+    }
 }

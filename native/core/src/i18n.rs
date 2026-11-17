@@ -171,6 +171,12 @@ pub const STRINGS: &[(&str, &str, &str)] = &[
     ("settings.mini_cpu", "Monitor CPU", "CPU monitor"),
     ("settings.mini_ram", "Monitor RAM", "RAM monitor"),
     ("settings.mini_agent", "Status Agent & Noki", "Agent Status & Noki"),
+    ("settings.mini_idle_on_pause", "Kembali ke mode idle saat jeda", "Return to idle when paused"),
+    (
+        "settings.mini_idle_on_pause_desc",
+        "Ciutkan pill ke tampilan jam & Noki saat musik di-pause atau tidak ada audio",
+        "Collapse pill back to clock & Noki view when music is paused or silent",
+    ),
     ("settings.mini_monitor_desc", "Hanya tampil di baris minimized", "Only shown in the minimized row"),
     ("settings.pill", "Pill", "Pill"),
     ("settings.pill_clock", "Jam di pill", "Clock in pill"),

@@ -368,6 +368,18 @@ impl Noktah {
         });
         ui.add_space(style::S2);
 
+        widgets::row_desc(
+            ui,
+            i18n::t(lang, "settings.mini_idle_on_pause"),
+            i18n::t(lang, "settings.mini_idle_on_pause_desc"),
+            theme,
+            |ui| {
+                if widgets::toggle(ui, &mut self.settings.mini_idle_on_pause, theme) {
+                    self.touch_settings();
+                }
+            },
+        );
+
         // Toggle Bebas Setiap Elemen
         widgets::row_desc(
             ui,

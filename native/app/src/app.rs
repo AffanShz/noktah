@@ -67,6 +67,9 @@ pub struct Noktah {
     pub todo_input: String,
 
     pub media: MediaState,
+    /// Waktu sejak sesi media aktif mulai berstatus pause (`!playing`), untuk
+    /// meredam jeda singkat `< 350 ms` saat lompat lagu (`Next`/`Prev`).
+    pub(crate) media_paused_since: Option<Instant>,
     pub lyrics: Vec<lrc::LrcLine>,
     pub lyrics_synced: bool,
     pub lyrics_status: LyricsStatus,
@@ -337,6 +340,7 @@ impl Noktah {
             todos,
             todo_input: String::new(),
             media: MediaState::default(),
+            media_paused_since: None,
             lyrics: Vec::new(),
             lyrics_synced: false,
             lyrics_status: LyricsStatus::Idle,

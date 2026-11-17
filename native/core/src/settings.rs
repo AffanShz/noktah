@@ -282,6 +282,11 @@ pub struct Settings {
     /// Maskot / status Agent Claude Code di baris minimized.
     #[serde(default = "default_true")]
     pub mini_agent: bool,
+    /// Kembali ke mode idle (`[Noki] + [Jam] + [||||]`) saat musik di-pause
+    /// atau tidak ada audio yang diputar. Bila `false`, pill tetap menahan
+    /// tampilan lagu terakhir selama sesi SMTC aktif.
+    #[serde(default = "default_true")]
+    pub mini_idle_on_pause: bool,
     pub start_with_windows: bool,
     /// Durasi pomodoro dalam menit.
     pub focus_minutes: u32,
@@ -340,6 +345,7 @@ impl Default for Settings {
             mini_cpu: true,
             mini_ram: true,
             mini_agent: true,
+            mini_idle_on_pause: true,
             start_with_windows: false,
             focus_minutes: 25,
             break_minutes: 5,
@@ -387,6 +393,19 @@ impl Settings {
         self.provider = provider;
         self.model = provider.default_model().into();
         self.base_url = provider.base_url().into();
+    }
+
+    /// Menentukan apakah baris minimized menampilkan mode pemutar musik
+    /// atau kembali ke mode idle.
+    pub fn show_media_in_mini(&self, media_active: bool, media_playing: bool) -> bool {
+        if !media_active {
+            return false;
+        }
+        if self.mini_idle_on_pause {
+            media_playing
+        } else {
+            true
+        }
     }
 
     pub fn apply_preset(&mut self, preset: MiniPreset) {
@@ -764,5 +783,24 @@ mod tests {
     fn bahasa_bisa_dibolak_balik() {
         assert_eq!(Lang::Id.toggle(), Lang::En);
         assert_eq!(Lang::En.toggle(), Lang::Id);
+    }
+
+    #[test]
+    fn show_media_in_mini_mengikuti_setelan_idle_saat_pause() {
+        let mut s = Settings::default();
+        assert!(s.mini_idle_on_pause);
+        let dari_kosong: Settings = serde_json::from_str("{}").unwrap();
+        assert!(dari_kosong.mini_idle_on_pause);
+
+        // Bawaan: kembali ke mode idle saat tidak aktif atau pause
+        assert!(!s.show_media_in_mini(false, false));
+        assert!(s.show_media_in_mini(true, true));
+        assert!(!s.show_media_in_mini(true, false));
+
+        // Jika dimatikan: tetap pertahankan tampilan lagu terakhir saat pause
+        s.mini_idle_on_pause = false;
+        assert!(!s.show_media_in_mini(false, false));
+        assert!(s.show_media_in_mini(true, true));
+        assert!(s.show_media_in_mini(true, false));
     }
 }
