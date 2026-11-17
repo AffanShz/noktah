@@ -5,9 +5,9 @@
 //! (sebelumnya baris mendatar yang menabrak tepi), dan kedua metrik memakai
 //! sparkline area di dasar kartu alih-alih satu grafik bersama.
 
-use crate::app::{Noktah, NotchPage};
-use crate::presentation::{icons::Icon, style, widgets};
-use eframe::egui::{self, Color32, Rect, Rounding, Sense, Stroke};
+use crate::app::Noktah;
+use crate::presentation::{style, widgets};
+use eframe::egui::{self, Rect, Rounding, Sense};
 use noktah_core::format;
 
 impl Noktah {
@@ -19,11 +19,7 @@ impl Noktah {
     pub(crate) fn draw_page_system(&mut self, ui: &mut egui::Ui, area: Rect) {
         let theme = self.theme;
 
-        let header_h = widgets::page_header(ui, "SYSTEM", &theme, |ui| {
-            if widgets::chip_button(ui, "Settings", false, &theme) {
-                self.show_settings = true;
-            }
-        });
+        let header_h = widgets::page_header(ui, "SYSTEM", &theme, |_ui| {});
 
         const FOOTER_H: f32 = 18.0;
         let body_h = (area.height() - header_h - FOOTER_H - style::S1).clamp(50.0, 64.0);
