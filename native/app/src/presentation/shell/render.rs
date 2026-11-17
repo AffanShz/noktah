@@ -18,7 +18,7 @@ impl Noktah {
     /// Jendela setelan terpisah (Viewport egui). Mengembalikan `true` saat
     /// pengguna menutup jendela — pemanggil yang mematikan `show_settings`.
     ///
-    /// Isinya memakai ulang `tab_settings` supaya tidak ada dua daftar
+    /// Isinya memakai ulang `draw_settings_tab_content` supaya tidak ada dua daftar
     /// setelan yang bisa berbeda; yang ditambahkan di sini hanya judul,
     /// tombol tutup, dan bingkai gulir.
     /// Jendela setelan terpisah (Viewport egui) dengan tab UI dengan navigasi sidebar

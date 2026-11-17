@@ -11,6 +11,7 @@ pub mod audio;
 pub mod blur;
 pub mod glass;
 pub mod ipc;
+pub mod logger;
 pub mod lyrics_client;
 pub mod music;
 pub mod os;

@@ -3,6 +3,24 @@
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/),
 versi mengikuti [SemVer](https://semver.org/lang/id/).
 
+## [1.2.2] - 2026-11-18
+
+### Ditambahkan
+- **Logger Diagnostik Lokal Berputar (`logs/noktah.log`)** — Pencatatan otomatis event startup, panic, error AI, fallback lirik, error kuota, dan pengecekan pembaruan dengan rotasi maksimal 256 KB ke `noktah.old.log`.
+- **Bagian Diagnostik & Log di Settings → About** — Tombol *Buka Folder Data*, *Lihat/Sembunyikan Log* (200 baris terakhir + `crash.log`), *Segarkan*, *Salin Log*, dan *Bersihkan Log*.
+- **Konfirmasi Reset Data 2-Klik** — Tombol *Hapus semua data* kini meminta konfirmasi klik kedua dalam jeda 5 detik sebelum menghapus data.
+- **Gate Kualitas di CI Release (`release-native.yml`)** — Menambahkan verifikasi konsistensi versi lintas 3 `Cargo.toml` + tag rilis serta menjalankan `cargo test --workspace` sebelum build rilis.
+- **Roadmap Multi-Versi (`docs/ROADMAP.md`)** — Pembaruan peta jalan pengembangan terstruktur untuk `v1.3.0`, `v1.4.0`, dan `v2.0.0`.
+
+### Diperbaiki
+- **Bug Penulisan Disk Setiap Frame (`tasks.json`)** — `check_reminders()` di `persistence.rs` kini hanya menulis ke disk ketika ada status pengingat yang benar-benar berubah, menghentikan penulisan file berulang setiap frame.
+- **Efisiensi Idle CPU & Polling Sistem** — Gating wakeup maskot 30 fps di `next_wake()` dan pembaruan `sysinfo` hanya saat elemen terkait terlihat atau sedang aktif; penambahan unit test `next_wake_hemat_saat_tertutup_tanpa_maskot`.
+- **Kelengkapan Pembersihan Data (`store::wipe`)** — Menghapus berkas persisten nyata (`settings.json`, `tasks.json`, `chat.json`, `pomodoro.json`, `settings-export.json`, `secret.bin`) dan folder cache `lyrics/`, serta mengosongkan state `pomodoro`, `api_key`, dan lirik di memori.
+- **Lokalisasi Antarmuka & Manifest Dinamis** — Memindahkan label dock, notifikasi selesai Pomodoro, reset harian, serta bagian Pembaruan/Data di About ke `i18n.rs`, dan menyelaraskan versi manifest XML di `build.rs` dengan `CARGO_PKG_VERSION`.
+
+### Dihapus
+- **Pembersihan Dead Code & Modul Transisi** — Menghapus berkas `native/app/src/tabs.rs`, alias modul transisi di `main.rs`, metode `NotchPage` yang tak terpakai, wrapper mati `tab_settings`, serta konstanta usang `DOCK_GROUP_W`.
+
 ## [1.2.1] - 2026-11-16
 
 ### Ditambahkan

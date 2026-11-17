@@ -56,8 +56,66 @@ pub fn save<T: Serialize>(name: &str, value: &T) {
 
 /// Menghapus semua data milik aplikasi (dipakai tombol "Hapus semua data").
 pub fn wipe() {
-    let dir = data_dir();
-    for nama in ["settings.json", "tasks.json", "chat.json", "focus.json"] {
+    wipe_in(&data_dir());
+}
+
+pub(crate) fn wipe_in(dir: &std::path::Path) {
+    for nama in [
+        "settings.json",
+        "tasks.json",
+        "chat.json",
+        "pomodoro.json",
+        "settings-export.json",
+        "secret.bin",
+    ] {
         let _ = std::fs::remove_file(dir.join(nama));
+    }
+    let _ = std::fs::remove_dir_all(dir.join("lyrics"));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wipe_menghapus_seluruh_data_dan_cache_lirik() {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let tmp = std::env::temp_dir().join(format!(
+            "noktah_store_wipe_{}_{nanos}",
+            std::process::id()
+        ));
+        let lyrics_dir = tmp.join("lyrics");
+        std::fs::create_dir_all(&lyrics_dir).unwrap();
+
+        for nama in [
+            "settings.json",
+            "tasks.json",
+            "chat.json",
+            "pomodoro.json",
+            "settings-export.json",
+            "secret.bin",
+        ] {
+            std::fs::write(tmp.join(nama), b"{}").unwrap();
+        }
+        std::fs::write(lyrics_dir.join("song.json"), b"{}").unwrap();
+
+        wipe_in(&tmp);
+
+        for nama in [
+            "settings.json",
+            "tasks.json",
+            "chat.json",
+            "pomodoro.json",
+            "settings-export.json",
+            "secret.bin",
+        ] {
+            assert!(!tmp.join(nama).exists(), "{nama} harus terhapus");
+        }
+        assert!(!lyrics_dir.exists(), "folder cache lyrics harus terhapus");
+
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 }

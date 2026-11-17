@@ -1,87 +1,62 @@
-# Roadmap
+# Roadmap Noktah
 
-Dokumen kerja, bukan janji. Urutan ditentukan oleh **dampak harian ÷ usaha**,
-bukan oleh seberapa keren fiturnya.
+Dokumen kerja untuk arah pengembangan **Noktah** (overlay Dynamic Island native Windows berbasis Rust + `egui`/`eframe`). Urutan disusun berdasarkan **urgensi stabilitas & dampak harian ÷ usaha teknis**, dengan prinsip inti: **100% native tanpa WebView, satu biner ringan, local-first, tanpa telemetri**.
 
-Legenda usaha: 🟢 beberapa jam · 🟡 beberapa hari · 🔴 butuh interop Windows
-tingkat rendah dan pengujian di perangkat asli.
+Legenda usaha: 🟢 beberapa jam · 🟡 beberapa hari · 🔴 butuh interop Windows tingkat rendah dan pengujian di perangkat asli.
 
 ---
 
-## Sudah selesai
+## Sudah selesai (`v1.0.0` – `v1.2.2`)
 
-- **Lirik** — LRCLIB dengan pencarian bertingkat dan retry 429/5xx.
-- **Bahasa Indonesia/English** — kamus terpusat di `native/core/src/i18n.rs`.
-- **Aplikasi Rust native** — digambar sendiri dengan `egui`/`eframe`, tanpa WebView.
-- **Test** — 157 test Rust: 81 di `native/core` (lirik, LRC, format, i18n,
-  model, setelan, pill, pengingat) dan 76 di `native/app` (geometri, tema,
-  tipografi, mini player). Dijalankan di CI pada tiap push ke `native/`.
-- **Gerak ala Apple** — kurva spring sungguhan, diimplementasikan di
-  `native/app/src/presentation/spring.rs` ([riset](MOTION.md)).
-- **Halaman Agent** — status Claude Code dan persetujuan izin langsung dari
-  notch, lewat biner pendamping `native/hook`.
-- **Halaman Hidrasi** dan **Now Playing**.
+- **Aplikasi Rust native (`egui`/`eframe`)** — tanpa WebView/runtime tambahan, terbagi menjadi `noktah-core`, `noktah-native`, dan `noktah-hook`.
+- **Dynamic Island & Morphing** — kurva spring terkalibrasi ([MOTION.md](MOTION.md)), squircle, liquid ears, pill minimized elastis yang dapat dikustomisasi, serta hover intent.
+- **Dock 7-Halaman & Kustomisasi** — Home (SMTC + kuota Antigravity), Music (SMTC + lirik tersinkron multi-provider LRCLIB/BetterLyrics/NetEase/KuGou + seekable lyrics + aksen album dinamis), Focus (Pomodoro dinamis), Tasks (pengingat + auto-banner), System (CPU/RAM/cuaca Open-Meteo), Ask (AI chat streaming 6 provider dengan enkripsi DPAPI), dan Agent (maskot Noki + gaze tracking + `noktah-hook` universal untuk Claude Code, Antigravity, dan CLI).
+- **Jendela Setelan Mandiri** — secondary viewport native *always-on-top*, kontrol visibilitas tab dock (`nav_*`), salin konfigurasi hook instan, serta in-app update checker GitHub.
+- **Stabilitas & Diagnostik (`v1.2.2`)** — perbaikan bug penulisan `tasks.json` tiap frame, gating idle wakeup & polling `sysinfo`, konfirmasi reset 2-klik beserta pembersihan penuh `store::wipe`, logger lokal berputar (`logs/noktah.log`) + penampil log di Settings, lokalisasi label dock/dialog, dan gate unit test di workflow rilis CI.
 
 ---
 
-## P0 — fondasi sebelum menambah fitur
+## `v1.3.0` — Produktivitas Harian, Agent Queue & Self-Update
 
-Kalau ini belum ada, setiap fitur baru menambah beban perawatan.
-
-| Item | Kenapa penting | Usaha |
-| --- | --- | --- |
-| **Auto-update** | Tanpa ini, setiap perbaikan berarti pengguna harus unduh ulang installer. Ini syarat minimum sebuah app desktop bisa dirawat. Butuh signing key + secret di repo; mekanismenya harus ditulis sendiri karena aplikasi ini tidak lagi memakai Tauri. | 🟡 |
-| **Modul on/off** | 9 halaman sekarang; menambah fitur tanpa saklar akan membuat UI penuh. Sekalian jadi dasar "halaman default". | 🟢 |
-| **Log lokal + halaman diagnosa** | Kalau pengguna melaporkan "musik tidak muncul", sekarang tidak ada cara melihat kenapa. Cukup tulis log ke `%APPDATA%\Noktah\noktah.log`, tampilkan 200 baris terakhir di Setelan. | 🟢 |
-| **Test UI native** | 76 test di `native/app` masih berpusat pada geometri, tema, dan tipografi; interaksi panel dan alur persetujuan Agent belum diuji. | 🟡 |
-
-## P1 — nilai harian, usaha kecil
+*Fokus: memaksimalkan kenyamanan pemakaian harian dan alur kerja AI/developer memakai infrastruktur yang sudah ada.*
 
 | Item | Isi | Usaha |
 | --- | --- | --- |
-| **Pengingat kesehatan** | Minum, istirahat gerak, jeda mata 20-20-20. Semua hanya butuh timer + notifikasi. | 🟢 |
-| **Day progress** | Seberapa jauh hari ini berjalan, ditampilkan di Beranda. | 🟢 |
-| **Terjemahan cepat** | Infrastruktur AI sudah ada; tinggal tab dengan input + Ctrl+Enter. | 🟢 |
-| **Catatan cepat** | Satu textarea, autosave. Melengkapi Tugas. | 🟢 |
-| **Tab default** | Buka notch langsung ke tab favorit. | 🟢 |
-
-## P2 — fitur berat, nilai tinggi
-
-| Item | Isi | Usaha |
-| --- | --- | --- |
-| **Lirik** | Butuh sumber lirik (LRCLIB gratis) + sinkronisasi ke posisi SMTC. Bisa dikerjakan tanpa interop baru. | 🟡 |
-| **Visualizer** | Butuh capture audio loopback (WASAPI) lalu FFT. Berat, dan menambah konsumsi CPU saat musik jalan. | 🔴 |
-| **Kalender iCal** | Parse file/URL `.ics`, tampilkan rapat berikutnya. Google/Outlook OAuth ditunda. | 🟡 |
-| **File shelf** | Drag & drop ke notch, simpan sementara, zip, konversi gambar. Di aplikasi native ini butuh interop `IDropTarget` Win32 sendiri. | 🔴 |
-| **Bluetooth & baterai perangkat** | Butuh WinRT `Windows.Devices.Bluetooth` + `Enumeration`. | 🔴 |
-| **Wi-Fi** | Butuh `WlanAPI`, dan di Windows 11 menuntut izin lokasi. Sensitif secara privasi. | 🔴 |
-
-## P3 — eksperimen, jangan dikerjakan sebelum P0–P2 rapi
-
-- **Multi-monitor**: satu notch per layar. Butuh refactor penempatan jendela.
-- **Posisi bebas**: notch bisa digeser, tidak selalu tengah atas.
-- **Snap zones**: butuh manajemen jendela Win32.
-- **Maskot 3D**: memproyeksikan maskot 2D procedural yang sudah ada ke ruang 3D.
+| **One-Click Self-Updater** | Unduh `.zip` rilis dari GitHub, verifikasi SHA-256 otomatis, ganti biner (`noktah-native.exe` + `noktah-hook.exe`), lalu restart mulus. | 🟡 |
+| **Multi-Agent Permission Queue** | Antrean FIFO permintaan izin untuk beberapa sesi agent paralel (`Claude Code` / `Antigravity`), lengkap dengan label workspace. | 🟡 |
+| **Halaman Default & Pintasan Cepat** | Pilih tab bawaan saat notch dibuka serta navigasi cepat keyboard (`Alt+1..7`, `Esc`). | 🟢 |
+| **Quick AI Actions** | Aksi kilat di tab Ask: terjemahkan clipboard (ID↔EN), ringkas teks, dan jelaskan error memakai kunci DPAPI aktif. | 🟢 |
+| **Scratchpad (Catatan Cepat)** | Area catatan instan dengan autosave ter-debounce di samping daftar tugas. | 🟢 |
+| **Focus DND & Rekap 7 Hari** | Mode senyap banner non-esensial selama sesi Fokus berlangsung dan statistik fokus mingguan. | 🟢 |
 
 ---
 
-## Utang teknis yang diketahui
+## `v1.4.0` — Integrasi Mendalam Windows & Perangkat Keras
 
-1. **Test UI native belum merata.** Logika murni sudah tertutup rapi (81 test di
-   `native/core`) dan `native/app` punya 76 test, tapi interaksi panel dan alur
-   persetujuan Agent belum diuji.
-2. **Polling kursor.** Region hover disegarkan dari thread UI tiap frame, bukan
-   dari thread pemantau — ini sudah menggantikan polling 40 ms yang lama. Sisa
-   utangnya: memastikan tidak ada polling saat idle total.
-3. **Statistik sistem dipoll berkala** meski panel tertutup; idealnya hanya saat
-   halaman Sistem dibuka.
-4. **Belum ada isolasi panic per halaman.** Satu panic di dalam `draw` akan
-   menjatuhkan seluruh proses, bukan hanya halaman itu.
-5. **Belum ada code signing**, jadi SmartScreen selalu memperingatkan.
+*Fokus: kesadaran konteks layar penuh, multi-monitor, dan perangkat eksternal.*
+
+| Item | Isi | Usaha |
+| --- | --- | --- |
+| **Multi-Monitor & Per-Monitor DPI** | Pilih layar utama/aktif/mengikuti kursor serta penanganan `WM_DPICHANGED` dan `WM_DISPLAYCHANGE` (100%–200%). | 🔴 |
+| **Fullscreen Auto-Hide** | Sembunyikan notch otomatis saat game, video, atau presentasi berjalan dalam mode layar penuh. | 🟡 |
+| **File Drop Shelf** | Dukungan `IDropTarget` Win32 untuk menampung berkas sementara lewat drag & drop. | 🔴 |
+| **HUD Perangkat Audio & Bluetooth** | Notifikasi mikro saat TWS/headset tersambung beserta indikator baterai perangkat via WinRT. | 🔴 |
+| **Kalender `.ics` Lokal** | Parse file/URL `.ics` untuk menampilkan pengingat rapat terdekat tanpa OAuth cloud. | 🟡 |
+
+---
+
+## `v2.0.0` — Distribusi Terpercaya & Ekosistem Ekstensibel
+
+*Fokus: distribusi publik tanpa friksi dan ekstensibilitas pihak pengguna.*
+
+- **Code Signing & `winget`** — penandatanganan digital biner rilis di CI untuk menghindari peringatan SmartScreen serta paket `winget` dengan registrasi `PATH` otomatis bagi `noktah-hook.exe`.
+- **Custom Status Tile via `noktah-hook`** — skema payload IPC agar skrip pengguna dapat menaruh status/metrik kustom di notch (mis. status CI, container, atau profil daya).
+- **Liquid Glass GPU Shader Stabil & Preset Tema** — penyempurnaan mode kaca penuh dan impor/ekspor preset tampilan.
+
+---
 
 ## Yang sengaja tidak dikerjakan
 
-- **Spotify Web API** — SMTC sudah memberi kontrol penuh tanpa OAuth, client ID,
-  dan refresh token. Menambahkannya hanya menambah permukaan kegagalan.
-- **Telemetri** — app ini tidak boleh mengirim data apa pun tanpa izin eksplisit.
-- **Akun & sinkronisasi cloud** — bertentangan dengan premis "data tinggal di PC".
+- **Kembali ke WebView / Electron / Tauri** — bertentangan dengan target biner tunggal ringan dan memori minimal.
+- **Spotify Web API** — Windows SMTC sudah memberi kontrol dan metadata lintas pemutar tanpa OAuth atau token tambahan.
+- **Telemetri & Akun Cloud** — aplikasi tidak boleh mengirim data analitik atau menyimpan data pengguna ke server pihak ketiga.

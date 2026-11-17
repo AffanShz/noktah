@@ -26,17 +26,17 @@ impl Noktah {
 
         // Urutan tombol datang dari `self.active_nav_pages()` — disesuaikan
         // dengan pilihan pengguna di setelan, menjaga konsistensi antara dock dan chevron.
-        let halaman: Vec<(NotchPage, Icon, &str)> = active_pages
+        let halaman: Vec<(NotchPage, Icon, &'static str)> = active_pages
             .into_iter()
             .map(|p| {
                 let label = match p {
-                    NotchPage::Home => "Home",
-                    NotchPage::Music => "Music",
-                    NotchPage::Pomodoro => "Focus",
-                    NotchPage::Tasks => "Tasks",
-                    NotchPage::System => "System",
-                    NotchPage::Ask => "Ask",
-                    NotchPage::Agent => "Agent",
+                    NotchPage::Home => self.tr("tab.home"),
+                    NotchPage::Music => self.tr("tab.music"),
+                    NotchPage::Pomodoro => self.tr("tab.focus"),
+                    NotchPage::Tasks => self.tr("tab.tasks"),
+                    NotchPage::System => self.tr("tab.system"),
+                    NotchPage::Ask => self.tr("tab.ask"),
+                    NotchPage::Agent => self.tr("tab.agent"),
                 };
                 (p, p.icon(), label)
             })

@@ -97,8 +97,16 @@ impl Noktah {
         while let Ok(result) = self.lyrics_client.rx.try_recv() {
             if result.track_id == self.lyrics_for {
                 self.lyrics_status = if result.lines.is_empty() {
+                    crate::infrastructure::logger::warn(
+                        "lyrics",
+                        &format!("No lyrics found for '{}'", result.track_id),
+                    );
                     LyricsStatus::NotFound
                 } else {
+                    crate::infrastructure::logger::info(
+                        "lyrics",
+                        &format!("Lyrics loaded via {}", result.provider),
+                    );
                     LyricsStatus::Found
                 };
                 self.lyrics = result.lines;
@@ -139,6 +147,7 @@ impl Noktah {
                 }
                 AiEvent::Error(pesan) => {
                     self.ai_busy = false;
+                    crate::infrastructure::logger::error("ai", &pesan);
                     self.banner = Some((format!("AI: {pesan}"), Instant::now()));
                 }
             }
@@ -182,10 +191,18 @@ impl Noktah {
         });
     }
 
+    /// Minta worker kuota membaca ulang sekarang, tanpa menunggu 3 menit.
+    ///
     /// Menarik hasil worker kuota. Hanya satu snapshot terbaru yang disimpan;
     /// kalau ada dua datang berurutan, yang terakhir menang.
     pub(crate) fn poll_quota(&mut self) {
         while let Ok(snap) = self.quota_worker.rx.try_recv() {
+            if let Some(err) = snap.error_key {
+                let prev = self.quota.as_ref().and_then(|q| q.error_key);
+                if prev != Some(err) {
+                    crate::infrastructure::logger::warn("quota", err);
+                }
+            }
             self.quota = Some(snap);
         }
     }
