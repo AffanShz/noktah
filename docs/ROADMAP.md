@@ -6,27 +6,14 @@ Legenda usaha: 🟢 beberapa jam · 🟡 beberapa hari · 🔴 butuh interop Win
 
 ---
 
-## Sudah selesai (`v1.0.0` – `v1.3.0`)
+## Sudah selesai (`v1.0.0` – `v1.4.0`)
 
 - **Aplikasi Rust native (`egui`/`eframe`)** — tanpa WebView/runtime tambahan, terbagi menjadi `noktah-core`, `noktah-native`, dan `noktah-hook`.
 - **Dynamic Island & Morphing** — kurva spring terkalibrasi ([MOTION.md](MOTION.md)), squircle, liquid ears, pill minimized elastis yang dapat dikustomisasi (termasuk `mini_idle_on_pause` saat audio dijeda), serta hover intent.
-- **Dock 7-Halaman & Kustomisasi** — Home (SMTC + Day Progress + kuota Antigravity), Music (SMTC + lirik tersinkron multi-provider LRCLIB/BetterLyrics/NetEase/KuGou + seekable lyrics + aksen album dinamis), Focus (Pomodoro dinamis + Focus DND + rekap 7 hari), Tasks (pengingat + auto-banner + Scratchpad autosave), System (CPU/RAM/cuaca Open-Meteo), Ask (AI chat streaming 6 provider + Quick AI Actions), dan Agent (maskot Noki + gaze tracking + `noktah-hook` universal).
+- **Dock 7-Halaman & Kustomisasi** — Home (SMTC + Day Progress + kuota Antigravity), Music (SMTC + lirik tersinkron multi-provider LRCLIB/BetterLyrics/NetEase/KuGou + seekable lyrics + aksen album dinamis), Focus (Pomodoro dinamis + Focus DND + rekap 7 hari), Tasks (pengingat + auto-banner + Scratchpad autosave + File Drop Shelf), System (CPU/RAM/cuaca Open-Meteo), Ask (AI chat streaming 6 provider + Quick AI Actions), dan Agent (maskot Noki + gaze tracking + `noktah-hook` universal).
+- **Integrasi Mendalam Windows & Perangkat Keras (`v1.4.0`)** — penempatan layar multi-monitor (`Primary` atau `CursorFollow`), deteksi fullscreen auto-hide pintar dengan peek intent (4 px tepi atas), File Drop Shelf penampung berkas sementara, notifikasi mikro HUD audio saat headset/speaker beralih, dan parser kalender lokal `.ics` (RFC 5545) zero cloud dependency.
 - **Jendela Setelan Mandiri & Harian (`v1.3.0`)** — halaman default saat dibuka + pintasan `Alt+1..7`/`Esc`, antrean izin multi-agent FIFO dengan nama workspace, serta One-Click Self-Updater dengan verifikasi SHA-256 terhadap `BACA-DULU.txt`.
 - **Stabilitas & Diagnostik (`v1.2.2`)** — perbaikan bug penulisan `tasks.json` tiap frame, gating idle wakeup & polling `sysinfo`, konfirmasi reset 2-klik beserta pembersihan penuh `store::wipe`, logger lokal berputar (`logs/noktah.log`) + penampil log di Settings, lokalisasi label dock/dialog, dan gate unit test di workflow rilis CI.
-
----
-
-## `v1.4.0` — Integrasi Mendalam Windows & Perangkat Keras
-
-*Fokus: kesadaran konteks layar penuh, multi-monitor, dan perangkat eksternal.*
-
-| Item | Isi | Usaha |
-| --- | --- | --- |
-| **Multi-Monitor & Per-Monitor DPI** | Pilih layar utama/aktif/mengikuti kursor serta penanganan `WM_DPICHANGED` dan `WM_DISPLAYCHANGE` (100%–200%). | 🔴 |
-| **Fullscreen Auto-Hide** | Sembunyikan notch otomatis saat game, video, atau presentasi berjalan dalam mode layar penuh. | 🟡 |
-| **File Drop Shelf** | Dukungan `IDropTarget` Win32 untuk menampung berkas sementara lewat drag & drop. | 🔴 |
-| **HUD Perangkat Audio & Bluetooth** | Notifikasi mikro saat TWS/headset tersambung beserta indikator baterai perangkat via WinRT. | 🔴 |
-| **Kalender `.ics` Lokal** | Parse file/URL `.ics` untuk menampilkan pengingat rapat terdekat tanpa OAuth cloud. | 🟡 |
 
 ---
 
