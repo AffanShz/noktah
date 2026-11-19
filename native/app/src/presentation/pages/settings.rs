@@ -121,6 +121,77 @@ impl Noktah {
                     }
                 },
             );
+            widgets::card_divider(ui);
+            widgets::row_desc(
+                ui,
+                i18n::t(lang, "settings.fullscreen_autohide"),
+                i18n::t(lang, "settings.fullscreen_autohide_desc"),
+                &theme,
+                |ui| {
+                    if widgets::toggle(ui, &mut self.settings.fullscreen_autohide, &theme) {
+                        self.touch_settings();
+                    }
+                },
+            );
+            widgets::card_divider(ui);
+            widgets::row_desc(
+                ui,
+                i18n::t(lang, "settings.monitor_mode"),
+                "Pilih layar penempatan (Layar Utama atau Ikuti Kursor)",
+                &theme,
+                |ui| {
+                    let cur_label = self.settings.monitor_mode.label();
+                    egui::ComboBox::from_id_salt("settings_monitor_mode")
+                        .selected_text(cur_label)
+                        .show_ui(ui, |ui| {
+                            for m in noktah_core::MonitorMode::ALL {
+                                if ui
+                                    .selectable_label(self.settings.monitor_mode == m, m.label())
+                                    .clicked()
+                                {
+                                    self.settings.monitor_mode = m;
+                                    self.touch_settings();
+                                }
+                            }
+                        });
+                },
+            );
+            widgets::card_divider(ui);
+            widgets::row_desc(
+                ui,
+                i18n::t(lang, "settings.audio_hud"),
+                i18n::t(lang, "settings.audio_hud_desc"),
+                &theme,
+                |ui| {
+                    if widgets::toggle(ui, &mut self.settings.audio_hud_enabled, &theme) {
+                        self.touch_settings();
+                    }
+                },
+            );
+            widgets::card_divider(ui);
+            widgets::row_desc(
+                ui,
+                i18n::t(lang, "settings.file_shelf"),
+                i18n::t(lang, "settings.file_shelf_desc"),
+                &theme,
+                |ui| {
+                    if widgets::toggle(ui, &mut self.settings.file_shelf_enabled, &theme) {
+                        self.touch_settings();
+                    }
+                },
+            );
+            widgets::card_divider(ui);
+            widgets::row_desc(
+                ui,
+                i18n::t(lang, "settings.calendar_enabled"),
+                i18n::t(lang, "settings.calendar_enabled_desc"),
+                &theme,
+                |ui| {
+                    if widgets::toggle(ui, &mut self.settings.calendar_enabled, &theme) {
+                        self.touch_settings();
+                    }
+                },
+            );
         });
 
         widgets::section(ui, "Notch & Motion", &theme);

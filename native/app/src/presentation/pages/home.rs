@@ -264,6 +264,20 @@ impl Noktah {
             (judul, sub, ketiga)
         } else {
             let open_tasks = self.todo_open_count();
+            let mut cal_sub = None;
+            if self.settings.calendar_enabled && !self.calendar_events.is_empty() {
+                let now_sec = chrono::Local::now().timestamp();
+                let upcoming =
+                    noktah_core::calendar::upcoming_events(&self.calendar_events, now_sec, 1);
+                if let Some(first) = upcoming.first() {
+                    cal_sub = Some(format!(
+                        "📅 {} ({})",
+                        first.summary,
+                        first.relative_time_label(now_sec)
+                    ));
+                }
+            }
+            let sub_text = cal_sub.unwrap_or_else(|| self.tr("home.open_music").to_string());
             let ketiga = if open_tasks > 0 {
                 format!(
                     "{} {day_pct}% · {open_tasks} tasks",
@@ -274,7 +288,7 @@ impl Noktah {
             };
             (
                 self.tr("music.nothing").to_string(),
-                self.tr("home.open_music").to_string(),
+                sub_text,
                 ketiga,
             )
         };
