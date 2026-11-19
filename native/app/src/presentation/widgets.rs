@@ -1161,3 +1161,123 @@ pub fn marquee_title(
 
     resp
 }
+
+/// Berkas yang ditampung sementara di File Drop Shelf.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ShelfFile {
+    pub name: String,
+    pub path: std::path::PathBuf,
+    pub size_bytes: u64,
+}
+
+/// Menampilkan rak berkas sementara (File Drop Shelf).
+pub fn render_drop_shelf(
+    ui: &mut egui::Ui,
+    files: &mut Vec<ShelfFile>,
+    theme: &Theme,
+    accent: Color32,
+) {
+    if files.is_empty() {
+        return;
+    }
+
+    ui.add_space(4.0);
+    egui::Frame::none()
+        .fill(Color32::from_rgba_premultiplied(20, 20, 24, 220))
+        .stroke(Stroke::new(1.0, Color32::from_white_alpha(30)))
+        .rounding(Rounding::same(8.0))
+        .inner_margin(egui::Margin::symmetric(10.0, 6.0))
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new("📁 Drop Shelf")
+                        .size(11.0)
+                        .strong()
+                        .color(accent),
+                );
+                ui.label(
+                    egui::RichText::new(format!("({} berkas)", files.len()))
+                        .size(10.0)
+                        .color(theme.dim),
+                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui
+                        .add(
+                            egui::Button::new(
+                                egui::RichText::new("Bersihkan")
+                                    .size(10.0)
+                                    .color(theme.dim),
+                            )
+                            .frame(false),
+                        )
+                        .clicked()
+                    {
+                        files.clear();
+                    }
+                });
+            });
+
+            ui.add_space(4.0);
+            let mut to_remove = None;
+            for (idx, f) in files.iter().enumerate() {
+                ui.horizontal(|ui| {
+                    ui.label(
+                        egui::RichText::new(format!("📄 {}", f.name))
+                            .size(11.0)
+                            .color(theme.ink),
+                    );
+                    let size_str = noktah_core::format::bytes(f.size_bytes);
+                    ui.label(
+                        egui::RichText::new(size_str)
+                            .size(10.0)
+                            .color(theme.dim),
+                    );
+
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui
+                            .add(
+                                egui::Button::new(
+                                    egui::RichText::new("✕")
+                                        .size(10.0)
+                                        .color(Color32::from_rgb(239, 68, 68)),
+                                )
+                                .frame(false),
+                            )
+                            .clicked()
+                        {
+                            to_remove = Some(idx);
+                        }
+                        if ui
+                            .add(
+                                egui::Button::new(
+                                    egui::RichText::new("📋 Salin").size(10.0).color(accent),
+                                )
+                                .frame(false),
+                            )
+                            .clicked()
+                        {
+                            ui.output_mut(|o| o.copied_text = f.path.to_string_lossy().to_string());
+                        }
+                        if ui
+                            .add(
+                                egui::Button::new(
+                                    egui::RichText::new("📂 Buka")
+                                        .size(10.0)
+                                        .color(theme.dim),
+                                )
+                                .frame(false),
+                            )
+                            .clicked()
+                        {
+                            let _ = std::process::Command::new("explorer.exe")
+                                .arg(format!("/select,{}", f.path.display()))
+                                .spawn();
+                        }
+                    });
+                });
+            }
+            if let Some(idx) = to_remove {
+                files.remove(idx);
+            }
+        });
+}

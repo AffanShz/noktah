@@ -237,3 +237,23 @@ fn run(ctx: egui::Context, tx: std::sync::mpsc::Sender<Bands>, active: Arc<Atomi
         let _ = client.Stop();
     }
 }
+
+/// Mendapatkan ID perangkat output audio default saat ini untuk mendeteksi perubahan headset/speaker.
+#[cfg(windows)]
+pub fn get_default_render_device_id() -> Option<String> {
+    use windows::Win32::Media::Audio::{eConsole, eRender, IMMDeviceEnumerator, MMDeviceEnumerator};
+    use windows::Win32::System::Com::{CoCreateInstance, CoInitializeEx, CLSCTX_ALL, COINIT_MULTITHREADED};
+
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        let enumerator = CoCreateInstance::<_, IMMDeviceEnumerator>(&MMDeviceEnumerator, None, CLSCTX_ALL).ok()?;
+        let device = enumerator.GetDefaultAudioEndpoint(eRender, eConsole).ok()?;
+        let id_pwstr = device.GetId().ok()?;
+        id_pwstr.to_string().ok()
+    }
+}
+
+#[cfg(not(windows))]
+pub fn get_default_render_device_id() -> Option<String> {
+    None
+}
