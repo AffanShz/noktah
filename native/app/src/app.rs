@@ -175,6 +175,11 @@ pub struct Noktah {
     pub mascot: crate::presentation::mascot::MascotState,
     pub pending_permissions: VecDeque<QueuedPermission>,
     pub ipc: crate::infrastructure::ipc::IpcHandle,
+    pub calendar_events: Vec<noktah_core::CalendarEvent>,
+    pub last_calendar_check: Instant,
+    pub file_shelf: Vec<crate::presentation::widgets::ShelfFile>,
+    pub last_audio_dev_check: Instant,
+    pub last_audio_dev_name: Option<String>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -471,6 +476,11 @@ impl Noktah {
             mascot: crate::presentation::mascot::MascotState::new(),
             pending_permissions: VecDeque::new(),
             ipc: crate::infrastructure::ipc::spawn(ctx.clone()),
+            calendar_events: Vec::new(),
+            last_calendar_check: Instant::now() - std::time::Duration::from_secs(60),
+            file_shelf: Vec::new(),
+            last_audio_dev_check: Instant::now() - std::time::Duration::from_secs(10),
+            last_audio_dev_name: None,
         };
         if let Some(p) = app.resolve_default_page() {
             app.current_page = p;

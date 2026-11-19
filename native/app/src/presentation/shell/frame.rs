@@ -457,7 +457,7 @@ impl eframe::App for Noktah {
         // Bentuk yang BENAR-BENAR digambar frame ini. Region jendela dan uji
         // klik memakai angka ini, bukan bentuk tujuan — kalau memakai tujuan,
         // panel terpotong di tengah animasi.
-        let current_base = layout::notch_rect(
+        let mut current_base = layout::notch_rect(
             self.open.pos,
             self.open_h.pos,
             self.pill.pos,
@@ -466,6 +466,16 @@ impl eframe::App for Noktah {
             open_w,
             open_h,
         );
+
+        // Fullscreen Auto-Hide: geser notch ke luar layar jika aplikasi layar penuh aktif
+        // kecuali kursor menyentuh 4 px tepi atas layar (peek intent) atau ada izin tertunda
+        let is_fs = self.settings.fullscreen_autohide && self.hover.fullscreen.load(Ordering::Relaxed);
+        let peek_intent = cy <= 4.0;
+        let fs_suppressed = is_fs && self.open.target == 0.0 && !peek_intent && self.pending_permissions.is_empty();
+        if fs_suppressed {
+            current_base = current_base.translate(egui::vec2(0.0, -70.0));
+        }
+
         let current_outer = layout::outer_shell_rect(current_base, self.dock_open.pos);
         self.hover
             .minimal_mix
@@ -473,6 +483,12 @@ impl eframe::App for Noktah {
         self.hover
             .pill_w
             .store(self.pill.pos.to_bits(), Ordering::Relaxed);
+        let mode_val = match self.settings.monitor_mode {
+            noktah_core::MonitorMode::Primary => 0,
+            noktah_core::MonitorMode::Cursor => 1,
+            noktah_core::MonitorMode::Index(idx) => 2 + idx,
+        };
+        self.hover.monitor_mode.store(mode_val, Ordering::Relaxed);
         self.hover.ears.store(self.settings.ears, Ordering::Relaxed);
         self.hover.open_w.store(open_w.to_bits(), Ordering::Relaxed);
         self.hover.open_h.store(open_h.to_bits(), Ordering::Relaxed);
@@ -580,6 +596,9 @@ impl eframe::App for Noktah {
         self.poll_quota();
         self.poll_ipc();
         self.poll_updater();
+        self.poll_calendar();
+        self.poll_audio_device();
+        self.poll_file_drop(ctx);
 
         // Pembaruan fisika & ekspresi mascot Noki
         if self.mascot_visible()

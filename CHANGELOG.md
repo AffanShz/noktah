@@ -3,6 +3,17 @@
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/),
 versi mengikuti [SemVer](https://semver.org/lang/id/).
 
+## [1.4.0] - 2026-11-19
+
+### Ditambahkan
+- **Kalender `.ics` Lokal (Zero Cloud Dependency)** — Parser RFC 5545 murni Rust (`noktah-core::calendar`) fail-safe tanpa ketergantungan library eksternal; mendukung pembacaan agenda rapat/jadwal lokal dari `%APPDATA%\Noktah\calendar.ics` atau path custom, ekstraksi `VEVENT` (`DTSTART`, `DTEND`, `SUMMARY`, `LOCATION`), serta integrasi agenda terdekat di kartu Home.
+- **Fullscreen Auto-Hide & Peek Intent** — Deteksi cerdas jendela aktif (foreground) berukuran layar penuh via Win32 `GetForegroundWindow` & `rcMonitor`; otomatis menyusutkan/menyembunyikan notch ke atas layar saat bermain game atau memutar video layar penuh tanpa mengganggu pengguna, dengan kemampuan peek intent saat kursor diarahkan ke 4 px tepi atas layar.
+- **Multi-Monitor & DPI Awareness** — Dukungan penempatan notch pada layar utama (`Primary`) maupun mode dinamis mengikuti kursor (`CursorFollow` via `MonitorFromPoint`), lengkap dengan penanganan scaling DPI dan rekonsiliasi posisi instan saat berpindah monitor.
+- **File Drop Shelf (Rak Berkas Sementara)** — Rak penampung berkas sementara di tab Tasks yang menangkap berkas yang di-drag & drop langsung ke area notch (`ctx.input raw.dropped_files`), menampilkan pratinjau berkas (nama, ukuran, ikon), tombol salin path clipboard, buka di File Explorer, dan bersihkan shelf.
+- **HUD Notifikasi Audio & Headset** — Deteksi otomatis pergantian default audio render endpoint via Windows Core Audio (`IMMDeviceEnumerator`), memunculkan banner HUD mikro animasi di notch saat headset/speaker beralih dengan proteksi Focus DND.
+- **Setelan Baru di Settings → Window** — Penambahan toggle saklar `Fullscreen Auto-Hide`, pemilih `Screen Placement` (`Layar Utama` / `Ikuti Kursor`), `Audio Device HUD`, `File Drop Shelf`, dan `Kalender .ics Lokal`.
+- **Test Suite Lanjutan** — Penambahan unit test parser RFC 5545, unfolding baris panjang, penapisan agenda waktu relatif, logika auto-hide fullscreen & peek intent, pembatasan kuota rak berkas, serta isolasi banner audio pada mode Focus DND (total 189 unit test lulus).
+
 ## [1.3.0] - 2026-11-18
 
 ### Ditambahkan
