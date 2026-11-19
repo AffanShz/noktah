@@ -1311,4 +1311,142 @@ mod tests {
         assert!(app.pending_permissions.is_empty());
         assert_eq!(app.open.target, 0.0);
     }
+
+    #[test]
+    fn test_fullscreen_autohide_dan_peek_intent() {
+        use crate::app::Noktah;
+        use std::sync::atomic::Ordering;
+
+        let ctx = egui::Context::default();
+        let hover = crate::infrastructure::platform::Hover::new(false);
+        let mut app = Noktah::new("test".to_string(), hover.clone(), &ctx);
+        app.settings = noktah_core::Settings::default();
+        app.settings.fullscreen_autohide = true;
+
+        // Saat tidak fullscreen, tidak ada supresi
+        hover.fullscreen.store(false, Ordering::Relaxed);
+        let is_fs = app.settings.fullscreen_autohide && hover.fullscreen.load(Ordering::Relaxed);
+        assert!(!is_fs);
+
+        // Saat fullscreen aktif dan kursor jauh dari tepi atas
+        hover.fullscreen.store(true, Ordering::Relaxed);
+        let is_fs = app.settings.fullscreen_autohide && hover.fullscreen.load(Ordering::Relaxed);
+        assert!(is_fs);
+
+        let cy_far = 50.0;
+        let peek_intent_far = cy_far <= 4.0;
+        assert!(!peek_intent_far);
+        let suppress = is_fs && app.open.target == 0.0 && !peek_intent_far;
+        assert!(suppress);
+
+        // Saat kursor menyentuh 4 px tepi atas layar (peek intent), supresi dilepas
+        let cy_peek = 2.0;
+        let peek_intent = cy_peek <= 4.0;
+        assert!(peek_intent);
+        let suppress_peek = is_fs && app.open.target == 0.0 && !peek_intent;
+        assert!(!suppress_peek);
+    }
+
+    #[test]
+    fn test_file_drop_shelf_cap_dan_clear() {
+        use crate::app::Noktah;
+        use crate::presentation::widgets::ShelfFile;
+        use std::path::PathBuf;
+
+        let ctx = egui::Context::default();
+        let hover = crate::infrastructure::platform::Hover::new(false);
+        let mut app = Noktah::new("test".to_string(), hover, &ctx);
+
+        for i in 1..=7 {
+            app.file_shelf.push(ShelfFile {
+                name: format!("doc-{i}.pdf"),
+                path: PathBuf::from(format!("C:\\temp\\doc-{i}.pdf")),
+                size_bytes: i * 1024,
+            });
+            if app.file_shelf.len() > 5 {
+                app.file_shelf.remove(0);
+            }
+        }
+
+        assert_eq!(app.file_shelf.len(), 5);
+        assert_eq!(app.file_shelf[0].name, "doc-3.pdf");
+        assert_eq!(app.file_shelf[4].name, "doc-7.pdf");
+
+        app.file_shelf.clear();
+        assert!(app.file_shelf.is_empty());
+    }
+
+    #[test]
+    fn test_audio_device_hud_dan_focus_dnd() {
+        use crate::app::Noktah;
+        use std::time::Instant;
+
+        let ctx = egui::Context::default();
+        let hover = crate::infrastructure::platform::Hover::new(false);
+        let mut app = Noktah::new("test".to_string(), hover, &ctx);
+        app.settings = noktah_core::Settings::default();
+        app.settings.audio_hud_enabled = true;
+        app.settings.focus_dnd = true;
+
+        // Simulasi deteksi pergantian perangkat audio saat DND tidak aktif
+        app.last_audio_dev_name = Some("speakers-guid".into());
+        let new_dev_id = "headphones-bluetooth-guid".to_string();
+        if app.last_audio_dev_name.as_deref() != Some(&new_dev_id) && !app.is_focus_dnd_active() {
+            app.banner = Some(("🎧 Output audio beralih".into(), Instant::now()));
+        }
+        assert!(app.banner.is_some());
+        assert_eq!(app.banner.as_ref().unwrap().0, "🎧 Output audio beralih");
+
+        // Saat fokus DND aktif, banner audio ditahan
+        app.banner = None;
+        app.pomodoro.running = true;
+        app.pomodoro.mode = noktah_core::PomodoroMode::Focus;
+        assert!(app.is_focus_dnd_active());
+        if app.last_audio_dev_name.as_deref() != Some("usb-dac-guid") && !app.is_focus_dnd_active() {
+            app.banner = Some(("🎧 Output audio beralih".into(), Instant::now()));
+        }
+        assert!(app.banner.is_none());
+    }
+
+    #[test]
+    fn test_calendar_agenda_filtering() {
+        use noktah_core::calendar::{upcoming_events, CalendarEvent};
+
+        let now_sec = 1_000_000;
+        let events = vec![
+            CalendarEvent {
+                uid: "1".into(),
+                summary: "Past Event".into(),
+                description: None,
+                location: None,
+                start_timestamp: now_sec - 10_000,
+                end_timestamp: Some(now_sec - 5_000),
+                all_day: false,
+            },
+            CalendarEvent {
+                uid: "2".into(),
+                summary: "Ongoing Event".into(),
+                description: None,
+                location: None,
+                start_timestamp: now_sec - 600,
+                end_timestamp: Some(now_sec + 1200),
+                all_day: false,
+            },
+            CalendarEvent {
+                uid: "3".into(),
+                summary: "Upcoming Meeting".into(),
+                description: None,
+                location: None,
+                start_timestamp: now_sec + 3600,
+                end_timestamp: Some(now_sec + 7200),
+                all_day: false,
+            },
+        ];
+
+        let upcoming = upcoming_events(&events, now_sec, 5);
+        assert_eq!(upcoming.len(), 2);
+        assert_eq!(upcoming[0].summary, "Ongoing Event");
+        assert_eq!(upcoming[1].summary, "Upcoming Meeting");
+        assert_eq!(upcoming[1].relative_time_label(now_sec), "1 jam lagi");
+    }
 }

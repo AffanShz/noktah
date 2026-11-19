@@ -152,6 +152,11 @@ impl Noktah {
             }
         }
 
+        if self.settings.file_shelf_enabled && !self.file_shelf.is_empty() {
+            widgets::render_drop_shelf(ui, &mut self.file_shelf, &theme, theme.accent);
+            ui.add_space(4.0);
+        }
+
         ui.add_space(style::S1);
 
         // ---- Daftar (`.tlist li` 30 px, garis bawah 0.5) ----

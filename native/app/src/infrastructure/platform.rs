@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex};
 use windows::Win32::Foundation::{HWND, POINT, RECT};
 #[cfg(windows)]
 use windows::Win32::Graphics::Gdi::{
-    GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+    GetMonitorInfoW, MonitorFromPoint, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
 };
 #[cfg(windows)]
 use windows::Win32::UI::HiDpi::{GetDpiForSystem, GetDpiForWindow};
@@ -155,6 +155,10 @@ pub struct Hover {
     pub open_h: AtomicU32,
     /// Derajat bukaan menu dock sebagai bit f32, dipakai fallback `shape()`.
     pub dock_open: AtomicU32,
+    /// true = jendela foreground sedang berada dalam mode layar penuh (game, video).
+    pub fullscreen: AtomicBool,
+    /// Mode penempatan monitor: 0 = Primary, 1 = CursorFollow, 2+ = Index.
+    pub monitor_mode: AtomicU32,
 }
 
 impl Hover {
@@ -178,6 +182,8 @@ impl Hover {
             open_w: AtomicU32::new(layout::OPEN_W.to_bits()),
             open_h: AtomicU32::new(layout::OPEN_H.to_bits()),
             dock_open: AtomicU32::new(0.0f32.to_bits()),
+            fullscreen: AtomicBool::new(false),
+            monitor_mode: AtomicU32::new(0),
         })
     }
 
@@ -264,14 +270,13 @@ pub fn initial_position() -> f32 {
 }
 
 #[cfg(windows)]
-fn center_window(hwnd: HWND) {
+pub fn center_window_on_monitor(hwnd: HWND, monitor: windows::Win32::Graphics::Gdi::HMONITOR) {
     unsafe {
         let mut rect = RECT::default();
         if GetWindowRect(hwnd, &mut rect).is_err() {
             return;
         }
 
-        let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
         let mut info = MONITORINFO {
             cbSize: std::mem::size_of::<MONITORINFO>() as u32,
             ..Default::default()
@@ -293,6 +298,70 @@ fn center_window(hwnd: HWND) {
             SWP_NOSIZE | SWP_NOACTIVATE,
         );
     }
+}
+
+#[cfg(windows)]
+fn center_window(hwnd: HWND) {
+    unsafe {
+        let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        center_window_on_monitor(hwnd, monitor);
+    }
+}
+
+/// Mendeteksi apakah jendela aktif (foreground) menutupi layar penuh (game, video fullscreen, presentasi).
+#[cfg(windows)]
+pub fn is_foreground_fullscreen(notch_hwnd: HWND) -> bool {
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GetClassNameW, GetDesktopWindow, GetForegroundWindow, GetShellWindow,
+    };
+
+    unsafe {
+        let fg = GetForegroundWindow();
+        if fg.is_invalid() || fg == notch_hwnd || fg == GetDesktopWindow() || fg == GetShellWindow()
+        {
+            return false;
+        }
+
+        // Abaikan bila jendela aktif adalah taskbar, desktop, atau komponen sistem
+        let mut class_name = [0u16; 64];
+        let len = GetClassNameW(fg, &mut class_name);
+        if len > 0 {
+            let class_str = String::from_utf16_lossy(&class_name[..len as usize]);
+            if class_str == "Shell_TrayWnd"
+                || class_str == "Progman"
+                || class_str == "WorkerW"
+                || class_str == "Windows.UI.Core.CoreWindow"
+            {
+                return false;
+            }
+        }
+
+        let mut fg_rect = RECT::default();
+        if GetWindowRect(fg, &mut fg_rect).is_err() {
+            return false;
+        }
+
+        let monitor = MonitorFromWindow(fg, MONITOR_DEFAULTTONEAREST);
+        let mut info = MONITORINFO {
+            cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+            ..Default::default()
+        };
+        if !GetMonitorInfoW(monitor, &mut info).as_bool() {
+            return false;
+        }
+
+        let mon = info.rcMonitor;
+        // Jendela fullscreen menutupi atau melebihi seluruh area monitor
+        fg_rect.left <= mon.left
+            && fg_rect.top <= mon.top
+            && fg_rect.right >= mon.right
+            && fg_rect.bottom >= mon.bottom
+    }
+}
+
+#[cfg(not(windows))]
+pub fn is_foreground_fullscreen(_notch_hwnd: usize) -> bool {
+    false
 }
 
 /// Memotong jendela menjadi bentuk notch.
@@ -437,7 +506,9 @@ pub fn spawn_watcher(ctx: Context, minimal: bool) -> Arc<Hover> {
                 let mut last_near = false;
                 let mut last_cursor_pos: Option<(f32, f32)> = None;
                 let mut hwnd: Option<HWND> = None;
-            let mut last_width: Option<i32> = None;
+                let mut last_width: Option<i32> = None;
+                let mut last_monitor_h: Option<isize> = None;
+                let mut fs_check_count: u32 = 0;
 
             loop {
                 // Saat morph berjalan, region jendela harus ikut bergerak:
@@ -495,6 +566,29 @@ pub fn spawn_watcher(ctx: Context, minimal: bool) -> Arc<Hover> {
                 let mut point = POINT::default();
                 if unsafe { GetCursorPos(&mut point) }.is_err() {
                     continue;
+                }
+
+                // Deteksi berkala jendela layar penuh (~320 ms)
+                fs_check_count += 1;
+                if fs_check_count >= 8 {
+                    fs_check_count = 0;
+                    let is_fs = is_foreground_fullscreen(h);
+                    if hover_thread.fullscreen.swap(is_fs, Ordering::Relaxed) != is_fs {
+                        ctx.request_repaint();
+                    }
+                }
+
+                // Cek penempatan monitor dinamis
+                let mode = hover_thread.monitor_mode.load(Ordering::Relaxed);
+                if mode == 1 {
+                    // Mode Ikuti Kursor: pindahkan jendela ke monitor tempat kursor berada
+                    let cursor_mon = unsafe { MonitorFromPoint(point, MONITOR_DEFAULTTONEAREST) };
+                    if last_monitor_h != Some(cursor_mon.0 as isize) {
+                        last_monitor_h = Some(cursor_mon.0 as isize);
+                        center_window_on_monitor(h, cursor_mon);
+                        force_alpha_visible(h);
+                        ctx.request_repaint();
+                    }
                 }
 
                 // Koordinat lokal dari rect sebenarnya, bukan dari posisi yang

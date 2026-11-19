@@ -240,6 +240,36 @@ impl Default for DefaultPage {
     }
 }
 
+/// Mode penempatan monitor untuk notch.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum MonitorMode {
+    Primary,
+    Cursor,
+    Index(u32),
+}
+
+impl Default for MonitorMode {
+    fn default() -> Self {
+        MonitorMode::Primary
+    }
+}
+
+impl MonitorMode {
+    pub const ALL: [MonitorMode; 2] = [
+        MonitorMode::Primary,
+        MonitorMode::Cursor,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            MonitorMode::Primary => "Layar Utama",
+            MonitorMode::Cursor => "Ikuti Kursor",
+            MonitorMode::Index(_) => "Monitor Tertentu",
+        }
+    }
+}
+
 impl DefaultPage {
     pub const ALL: [DefaultPage; 8] = [
         DefaultPage::LastOpened,
@@ -365,6 +395,24 @@ pub struct Settings {
     pub nav_ask: bool,
     #[serde(default = "default_true")]
     pub nav_agent: bool,
+    /// Sembunyikan notch otomatis saat mendeteksi jendela layar penuh (game, video).
+    #[serde(default = "default_true")]
+    pub fullscreen_autohide: bool,
+    /// Mode penempatan monitor (Layar Utama atau Ikuti Kursor).
+    #[serde(default)]
+    pub monitor_mode: MonitorMode,
+    /// Mengaktifkan kalender lokal .ics.
+    #[serde(default = "default_true")]
+    pub calendar_enabled: bool,
+    /// Lokasi custom berkas kalender .ics (kosong = bawaan %APPDATA%\Noktah\calendar.ics).
+    #[serde(default)]
+    pub calendar_ics_path: String,
+    /// Mengaktifkan File Drop Shelf (rak penampung berkas sementara).
+    #[serde(default = "default_true")]
+    pub file_shelf_enabled: bool,
+    /// Menampilkan HUD banner saat perangkat audio beralih / tersambung.
+    #[serde(default = "default_true")]
+    pub audio_hud_enabled: bool,
 }
 
 impl Default for Settings {
@@ -417,6 +465,12 @@ impl Default for Settings {
             nav_system: true,
             nav_ask: true,
             nav_agent: true,
+            fullscreen_autohide: true,
+            monitor_mode: MonitorMode::Primary,
+            calendar_enabled: true,
+            calendar_ics_path: String::new(),
+            file_shelf_enabled: true,
+            audio_hud_enabled: true,
         }
     }
 }

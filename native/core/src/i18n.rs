@@ -232,6 +232,15 @@ pub const STRINGS: &[(&str, &str, &str)] = &[
     ("settings.self_update", "Unduh & Pasang Otomatis", "Download & Install Update"),
     ("settings.downloading_update", "Mengunduh & memverifikasi SHA-256…", "Downloading & verifying SHA-256…"),
     ("settings.restart_to_apply", "Pasang & Mulai Ulang Sekarang", "Install & Restart Now"),
+    ("settings.fullscreen_autohide", "Auto-Hide Layar Penuh", "Fullscreen Auto-Hide"),
+    ("settings.fullscreen_autohide_desc", "Sembunyikan notch otomatis saat bermain game atau video layar penuh", "Automatically hide notch when playing games or full-screen videos"),
+    ("settings.monitor_mode", "Penempatan Layar", "Screen Placement"),
+    ("settings.calendar_enabled", "Kalender .ics Lokal", "Local .ics Calendar"),
+    ("settings.calendar_enabled_desc", "Tampilkan agenda rapat lokal dari berkas .ics di halaman Home", "Show local meeting agenda from .ics file on Home page"),
+    ("settings.file_shelf", "Rak Berkas (Drop Shelf)", "File Drop Shelf"),
+    ("settings.file_shelf_desc", "Tampung berkas sementara saat di-drag ke area notch", "Hold temporary files when dragged onto the notch"),
+    ("settings.audio_hud", "HUD Perangkat Audio", "Audio Device HUD"),
+    ("settings.audio_hud_desc", "Tampilkan notifikasi mikro saat perangkat audio beralih", "Show micro notification when audio device changes"),
     ("notch.hint", "Arahkan kursor untuk membuka", "Hover to open"),
 ];
 

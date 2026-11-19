@@ -487,4 +487,88 @@ impl Noktah {
             self.update_status = st;
         }
     }
+
+    pub(crate) fn poll_calendar(&mut self) {
+        if !self.settings.calendar_enabled {
+            return;
+        }
+
+        if self.last_calendar_check.elapsed() < std::time::Duration::from_secs(45) {
+            return;
+        }
+        self.last_calendar_check = std::time::Instant::now();
+
+        let path = if !self.settings.calendar_ics_path.trim().is_empty() {
+            std::path::PathBuf::from(self.settings.calendar_ics_path.trim())
+        } else if let Some(appdata) = std::env::var_os("APPDATA") {
+            std::path::PathBuf::from(appdata).join("Noktah").join("calendar.ics")
+        } else {
+            return;
+        };
+
+        if path.exists() {
+            if let Ok(content) = std::fs::read_to_string(&path) {
+                self.calendar_events = noktah_core::calendar::parse_ics(&content);
+            }
+        }
+    }
+
+    pub(crate) fn poll_audio_device(&mut self) {
+        if !self.settings.audio_hud_enabled {
+            return;
+        }
+
+        if self.last_audio_dev_check.elapsed() < std::time::Duration::from_secs(3) {
+            return;
+        }
+        self.last_audio_dev_check = std::time::Instant::now();
+
+        if let Some(cur_id) = crate::infrastructure::audio::get_default_render_device_id() {
+            if let Some(prev) = &self.last_audio_dev_name {
+                if prev != &cur_id && !self.is_focus_dnd_active() {
+                    self.banner = Some((
+                        "🎧 Output audio beralih".to_string(),
+                        std::time::Instant::now(),
+                    ));
+                }
+            }
+            self.last_audio_dev_name = Some(cur_id);
+        }
+    }
+
+    pub(crate) fn poll_file_drop(&mut self, ctx: &egui::Context) {
+        if !self.settings.file_shelf_enabled {
+            return;
+        }
+
+        let dropped = ctx.input(|i| i.raw.dropped_files.clone());
+        let mut added = false;
+        for df in dropped {
+            if let Some(path) = df.path {
+                let name = path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "File".into());
+                let size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+                if !self.file_shelf.iter().any(|f| f.path == path) {
+                    self.file_shelf.push(crate::presentation::widgets::ShelfFile {
+                        name,
+                        path,
+                        size_bytes: size,
+                    });
+                    if self.file_shelf.len() > 5 {
+                        self.file_shelf.remove(0);
+                    }
+                    added = true;
+                }
+            }
+        }
+
+        if added && !self.is_focus_dnd_active() {
+            self.banner = Some((
+                "📁 Berkas ditambahkan ke Drop Shelf".to_string(),
+                std::time::Instant::now(),
+            ));
+        }
+    }
 }
