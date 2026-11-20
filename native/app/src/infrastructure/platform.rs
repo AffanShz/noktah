@@ -312,7 +312,8 @@ fn center_window(hwnd: HWND) {
 #[cfg(windows)]
 pub fn is_foreground_fullscreen(notch_hwnd: HWND) -> bool {
     use windows::Win32::UI::WindowsAndMessaging::{
-        GetClassNameW, GetDesktopWindow, GetForegroundWindow, GetShellWindow,
+        GetClassNameW, GetDesktopWindow, GetForegroundWindow, GetShellWindow, GetWindowLongPtrW,
+        IsIconic, IsWindowVisible, GWL_STYLE, WS_CAPTION, WS_CHILD, WS_MAXIMIZE,
     };
 
     unsafe {
@@ -322,15 +323,41 @@ pub fn is_foreground_fullscreen(notch_hwnd: HWND) -> bool {
             return false;
         }
 
-        // Abaikan bila jendela aktif adalah taskbar, desktop, atau komponen sistem
+        // Jendela tidak terlihat atau terminimalkan bukan fullscreen
+        if !IsWindowVisible(fg).as_bool() || IsIconic(fg).as_bool() {
+            return false;
+        }
+
+        let style = GetWindowLongPtrW(fg, GWL_STYLE);
+
+        // Jendela anak tidak bisa fullscreen
+        if (style & (WS_CHILD.0 as isize)) != 0 {
+            return false;
+        }
+
+        // Jendela standar yang dimaksimalkan memiliki titlebar/caption atau style WS_MAXIMIZE.
+        // Fullscreen sejati (game borderless/exclusive, video F11) tidak memiliki WS_CAPTION atau WS_MAXIMIZE.
+        if (style & (WS_MAXIMIZE.0 as isize)) != 0 {
+            return false;
+        }
+        if (style & (WS_CAPTION.0 as isize)) == (WS_CAPTION.0 as isize) {
+            return false;
+        }
+
+        // Abaikan bila jendela aktif adalah taskbar, desktop, atau komponen sistem shell
         let mut class_name = [0u16; 64];
         let len = GetClassNameW(fg, &mut class_name);
         if len > 0 {
             let class_str = String::from_utf16_lossy(&class_name[..len as usize]);
             if class_str == "Shell_TrayWnd"
+                || class_str == "Shell_SecondaryTrayWnd"
                 || class_str == "Progman"
                 || class_str == "WorkerW"
                 || class_str == "Windows.UI.Core.CoreWindow"
+                || class_str == "XamlExplorerHostIslandWindow"
+                || class_str == "TopLevelWindowForOverflowXamlIsland"
+                || class_str == "ApplicationFrameWindow"
+                || class_str == "SysListView32"
             {
                 return false;
             }
@@ -341,12 +368,17 @@ pub fn is_foreground_fullscreen(notch_hwnd: HWND) -> bool {
             return false;
         }
 
-        let monitor = MonitorFromWindow(fg, MONITOR_DEFAULTTONEAREST);
+        let notch_mon = MonitorFromWindow(notch_hwnd, MONITOR_DEFAULTTONEAREST);
+        let fg_mon = MonitorFromWindow(fg, MONITOR_DEFAULTTONEAREST);
+        if fg_mon != notch_mon {
+            return false;
+        }
+
         let mut info = MONITORINFO {
             cbSize: std::mem::size_of::<MONITORINFO>() as u32,
             ..Default::default()
         };
-        if !GetMonitorInfoW(monitor, &mut info).as_bool() {
+        if !GetMonitorInfoW(fg_mon, &mut info).as_bool() {
             return false;
         }
 

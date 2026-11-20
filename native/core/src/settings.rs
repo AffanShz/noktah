@@ -396,7 +396,7 @@ pub struct Settings {
     #[serde(default = "default_true")]
     pub nav_agent: bool,
     /// Sembunyikan notch otomatis saat mendeteksi jendela layar penuh (game, video).
-    #[serde(default = "default_true")]
+    #[serde(default)]
     pub fullscreen_autohide: bool,
     /// Mode penempatan monitor (Layar Utama atau Ikuti Kursor).
     #[serde(default)]
@@ -465,7 +465,7 @@ impl Default for Settings {
             nav_system: true,
             nav_ask: true,
             nav_agent: true,
-            fullscreen_autohide: true,
+            fullscreen_autohide: false,
             monitor_mode: MonitorMode::Primary,
             calendar_enabled: true,
             calendar_ics_path: String::new(),

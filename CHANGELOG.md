@@ -3,6 +3,16 @@
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/),
 versi mengikuti [SemVer](https://semver.org/lang/id/).
 
+## [1.4.1] - 2026-11-20
+
+### Diperbaiki
+- **Deteksi Layar Penuh (Fullscreen) Akurat & Bebas False Positive** — Menyaring dan mengabaikan jendela aplikasi standar yang dimaksimalkan (*maximized*, seperti Chrome, VS Code, File Explorer) melalui pengecekan gaya Win32 `WS_MAXIMIZE` dan `WS_CAPTION`. Supresi auto-hide kini hanya berlaku pada game atau video layar penuh (F11) sejati yang menutupi monitor tanpa titlebar/caption standar.
+- **Pencegahan Notch Hilang Saat Minimize** — Memastikan notch Noktah dalam keadaan minimize (`open.target == 0.0`) selalu tampak dan stabil di atas layar tanpa mewajibkan kursor diarahkan (*hover*) terlebih dahulu.
+- **Isolasi Monitor Jendela Aktif** — Memastikan deteksi layar penuh hanya memeriksa jendela yang berada pada monitor yang sama dengan jendela Noktah (`fg_mon == notch_mon`), mencegah jendela di monitor sekunder menyembunyikan notch di monitor utama.
+- **Pengecualian Kelas Shell & Desktop Windows 11** — Menambahkan filter pencegahan supresi untuk desktop dan shell host Windows 11 (`Shell_SecondaryTrayWnd`, `XamlExplorerHostIslandWindow`, `SysListView32`, dll).
+- **Ambang Gestur Peek Lebih Responsif** — Melonggarkan ambang batas *peek intent* menjadi `<= 10.0 px` dari tepi atas monitor agar notch lebih mudah dimunculkan kembali saat pengguna memainkan game layar penuh.
+- **Setelan Bawaan Aman (Opt-In)** — Mengubah nilai default `fullscreen_autohide` menjadi `false` agar notch tidak pernah bersembunyi secara tidak terduga pada instalasi awal.
+
 ## [1.4.0] - 2026-11-19
 
 ### Ditambahkan

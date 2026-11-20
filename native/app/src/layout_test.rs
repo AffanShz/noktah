@@ -1334,14 +1334,14 @@ mod tests {
         assert!(is_fs);
 
         let cy_far = 50.0;
-        let peek_intent_far = cy_far <= 4.0;
+        let peek_intent_far = cy_far <= 10.0;
         assert!(!peek_intent_far);
         let suppress = is_fs && app.open.target == 0.0 && !peek_intent_far;
         assert!(suppress);
 
-        // Saat kursor menyentuh 4 px tepi atas layar (peek intent), supresi dilepas
-        let cy_peek = 2.0;
-        let peek_intent = cy_peek <= 4.0;
+        // Saat kursor menyentuh tepi atas layar (peek intent <= 10 px), supresi dilepas
+        let cy_peek = 6.0;
+        let peek_intent = cy_peek <= 10.0;
         assert!(peek_intent);
         let suppress_peek = is_fs && app.open.target == 0.0 && !peek_intent;
         assert!(!suppress_peek);
