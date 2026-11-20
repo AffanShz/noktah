@@ -468,9 +468,9 @@ impl eframe::App for Noktah {
         );
 
         // Fullscreen Auto-Hide: geser notch ke luar layar jika aplikasi layar penuh aktif
-        // kecuali kursor menyentuh 4 px tepi atas layar (peek intent) atau ada izin tertunda
+        // kecuali kursor menyentuh <= 10 px tepi atas layar (peek intent) atau ada izin tertunda
         let is_fs = self.settings.fullscreen_autohide && self.hover.fullscreen.load(Ordering::Relaxed);
-        let peek_intent = cy <= 4.0;
+        let peek_intent = cy <= 10.0;
         let fs_suppressed = is_fs && self.open.target == 0.0 && !peek_intent && self.pending_permissions.is_empty();
         if fs_suppressed {
             current_base = current_base.translate(egui::vec2(0.0, -70.0));
