@@ -99,6 +99,14 @@ fn setup_panic_logger() {
 }
 
 fn main() -> eframe::Result<()> {
+    // Pastikan working directory selalu berada di folder executable,
+    // bukan di C:\Windows\System32 saat dijalankan via registry Run.
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            let _ = std::env::set_current_dir(exe_dir);
+        }
+    }
+
     setup_panic_logger();
 
     // Satu instance saja: notch kedua akan menimpa yang pertama.
