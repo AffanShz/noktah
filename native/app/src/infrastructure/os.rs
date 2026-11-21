@@ -15,6 +15,9 @@ pub fn set_autostart(enabled: bool) -> Result<(), String> {
     let subkey: Vec<u16> = "Software\\Microsoft\\Windows\\CurrentVersion\\Run\0"
         .encode_utf16()
         .collect();
+    let approved_subkey: Vec<u16> = "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run\0"
+        .encode_utf16()
+        .collect();
     let nama: Vec<u16> = "Noktah\0".encode_utf16().collect();
 
     unsafe {
@@ -31,7 +34,9 @@ pub fn set_autostart(enabled: bool) -> Result<(), String> {
 
         let hasil = if enabled {
             let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-            let value: Vec<u16> = format!("\"{}\"", exe.display())
+            let exe_str = exe.to_string_lossy();
+            let clean_path = exe_str.strip_prefix(r"\\?\").unwrap_or(&exe_str);
+            let value: Vec<u16> = format!("\"{}\"", clean_path)
                 .encode_utf16()
                 .chain(std::iter::once(0))
                 .collect();
@@ -39,11 +44,44 @@ pub fn set_autostart(enabled: bool) -> Result<(), String> {
                 value.as_ptr() as *const u8,
                 value.len() * std::mem::size_of::<u16>(),
             );
-            RegSetValueExW(key, PCWSTR(nama.as_ptr()), 0, REG_SZ, Some(bytes))
+            let set_res = RegSetValueExW(key, PCWSTR(nama.as_ptr()), 0, REG_SZ, Some(bytes))
                 .ok()
-                .map_err(|e| e.to_string())
+                .map_err(|e| e.to_string());
+
+            // Hapus pencekalan disabled di StartupApproved\Run jika user pernah mematikan via Task Manager
+            let mut app_key = HKEY::default();
+            if RegOpenKeyExW(
+                HKEY_CURRENT_USER,
+                PCWSTR(approved_subkey.as_ptr()),
+                0,
+                KEY_SET_VALUE,
+                &mut app_key,
+            )
+            .is_ok()
+            {
+                let _ = RegDeleteValueW(app_key, PCWSTR(nama.as_ptr()));
+                let _ = RegCloseKey(app_key);
+            }
+
+            set_res
         } else {
-            let _ = RegDeleteValueW(key, PCWSTR(nama.as_ptr()));
+            let del_res = RegDeleteValueW(key, PCWSTR(nama.as_ptr()));
+
+            let mut app_key = HKEY::default();
+            if RegOpenKeyExW(
+                HKEY_CURRENT_USER,
+                PCWSTR(approved_subkey.as_ptr()),
+                0,
+                KEY_SET_VALUE,
+                &mut app_key,
+            )
+            .is_ok()
+            {
+                let _ = RegDeleteValueW(app_key, PCWSTR(nama.as_ptr()));
+                let _ = RegCloseKey(app_key);
+            }
+
+            let _ = del_res;
             Ok(())
         };
 
@@ -61,10 +99,13 @@ pub fn set_autostart(_enabled: bool) -> Result<(), String> {
 pub fn autostart_enabled() -> bool {
     use windows::core::PCWSTR;
     use windows::Win32::System::Registry::{
-        RegCloseKey, RegOpenKeyExW, RegQueryValueExW, HKEY, HKEY_CURRENT_USER, KEY_READ,
+        RegCloseKey, RegOpenKeyExW, RegQueryValueExW, HKEY, HKEY_CURRENT_USER, KEY_READ, REG_BINARY,
     };
 
     let subkey: Vec<u16> = "Software\\Microsoft\\Windows\\CurrentVersion\\Run\0"
+        .encode_utf16()
+        .collect();
+    let approved_subkey: Vec<u16> = "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run\0"
         .encode_utf16()
         .collect();
     let nama: Vec<u16> = "Noktah\0".encode_utf16().collect();
@@ -93,7 +134,46 @@ pub fn autostart_enabled() -> bool {
             Some(&mut ukuran),
         );
         let _ = RegCloseKey(key);
-        hasil.is_ok() && ukuran > 0
+
+        if hasil.is_err() || ukuran == 0 {
+            return false;
+        }
+
+        // Periksa apakah status autostart dinonaktifkan oleh Task Manager / Settings Windows
+        let mut app_key = HKEY::default();
+        if RegOpenKeyExW(
+            HKEY_CURRENT_USER,
+            PCWSTR(approved_subkey.as_ptr()),
+            0,
+            KEY_READ,
+            &mut app_key,
+        )
+        .is_ok()
+        {
+            let mut buf = [0u8; 12];
+            let mut buf_size = buf.len() as u32;
+            let mut val_type = REG_BINARY;
+            if RegQueryValueExW(
+                app_key,
+                PCWSTR(nama.as_ptr()),
+                None,
+                Some(&mut val_type),
+                Some(buf.as_mut_ptr()),
+                Some(&mut buf_size),
+            )
+            .is_ok()
+                && buf_size > 0
+            {
+                // Nilai byte ganjil (misal 0x01 atau 0x03) menandakan status Disabled di Windows Explorer
+                if buf[0] & 1 != 0 {
+                    let _ = RegCloseKey(app_key);
+                    return false;
+                }
+            }
+            let _ = RegCloseKey(app_key);
+        }
+
+        true
     }
 }
 
