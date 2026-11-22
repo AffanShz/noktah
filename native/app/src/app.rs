@@ -375,10 +375,10 @@ impl Noktah {
         let pill_w = settings.mini_width(false, false);
         let lyrics_enabled = settings.lyrics_enabled;
 
-        // Pastikan entri autostart di registry selalu mutakhir jika diaktifkan.
-        if settings.start_with_windows {
-            let _ = crate::infrastructure::os::set_autostart(true);
-        }
+        // Autostart sengaja TIDAK disinkronkan di sini: konstruktor ini juga
+        // dipanggil harness test, dan dulu itu menulis path harness ke registry
+        // `Run`. Sinkronisasi ada di `main.rs` (entri produksi) lewat
+        // `os::sync_autostart`.
 
         hover.expanded.store(start_open, Ordering::Relaxed);
 

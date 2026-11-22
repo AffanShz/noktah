@@ -120,6 +120,11 @@ fn main() -> eframe::Result<()> {
     );
 
     let settings: noktah_core::settings::Settings = infrastructure::store::load("settings.json");
+
+    // Entri autostart disinkronkan di sini, bukan di `Noktah::new`: konstruktor
+    // itu juga dipanggil harness test dan tidak boleh menyentuh registry pengguna.
+    infrastructure::os::sync_autostart(settings.start_with_windows);
+
     let x = infrastructure::platform::initial_position();
 
     let mut viewport = egui::ViewportBuilder::default()

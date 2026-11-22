@@ -3,9 +3,53 @@
 //! Tray dan hotkey butuh jendela tersembunyi dengan message loop sendiri,
 //! karena `egui` tidak menyediakan tempat menangkap `WM_HOTKEY`.
 
+/// Apakah path ini binary hasil `cargo test`, bukan aplikasi.
+///
+/// `cargo test` menghasilkan `noktah_native-<hash>.exe` di `target/*/deps`.
+/// Harness egui di `layout_test.rs` memanggil `Noktah::new`, dan sampai
+/// 2026-11-22 pemanggilan itu ikut menulis path harness ke registry `Run` —
+/// komputer lalu menjalankan test suite saat boot, bukan Noktah.
+fn looks_like_test_binary(exe: &std::path::Path) -> bool {
+    let Some(stem) = exe.file_stem().and_then(|s| s.to_str()) else {
+        return false;
+    };
+    ["noktah_native-", "noktah_core-", "noktah_hook-"]
+        .iter()
+        .any(|awalan| stem.starts_with(awalan))
+}
+
 /// Menyalakan/mematikan entri autostart di registry pengguna.
 #[cfg(windows)]
 pub fn set_autostart(enabled: bool) -> Result<(), String> {
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    // Tidak ada jalur mana pun yang boleh mendaftarkan binary test ke registry.
+    if looks_like_test_binary(&exe) {
+        return Err("binary test tidak boleh didaftarkan sebagai autostart".into());
+    }
+    set_autostart_for(&exe, enabled)
+}
+
+/// Menyinkronkan entri autostart dengan setelan, sekali saat start.
+///
+/// Sengaja tidak dipanggil dari `Noktah::new`: konstruktor itu juga dipakai
+/// harness test, sedangkan fungsi ini menyentuh registry pengguna.
+pub fn sync_autostart(start_with_windows: bool) {
+    // Build test tidak boleh menulis registry sama sekali.
+    if cfg!(test) || !start_with_windows {
+        return;
+    }
+    let Ok(exe) = std::env::current_exe() else {
+        return;
+    };
+    if looks_like_test_binary(&exe) {
+        return;
+    }
+    let _ = set_autostart_for(&exe, true);
+}
+
+/// Inti penulisan registry untuk satu path executable tertentu.
+#[cfg(windows)]
+fn set_autostart_for(exe: &std::path::Path, enabled: bool) -> Result<(), String> {
     use windows::core::PCWSTR;
     use windows::Win32::System::Registry::{
         RegCloseKey, RegDeleteValueW, RegOpenKeyExW, RegSetValueExW, HKEY, HKEY_CURRENT_USER,
@@ -20,6 +64,15 @@ pub fn set_autostart(enabled: bool) -> Result<(), String> {
         .collect();
     let nama: Vec<u16> = "Noktah\0".encode_utf16().collect();
 
+    // Path disiapkan sebelum kunci dibuka, supaya tidak ada jalur `?` yang
+    // meninggalkan handle `Run` terbuka.
+    let exe_str = exe.to_string_lossy();
+    let clean_path = exe_str.strip_prefix(r"\\?\").unwrap_or(&exe_str);
+    let value: Vec<u16> = format!("\"{}\"", clean_path)
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
+
     unsafe {
         let mut key = HKEY::default();
         RegOpenKeyExW(
@@ -33,13 +86,6 @@ pub fn set_autostart(enabled: bool) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
 
         let hasil = if enabled {
-            let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-            let exe_str = exe.to_string_lossy();
-            let clean_path = exe_str.strip_prefix(r"\\?\").unwrap_or(&exe_str);
-            let value: Vec<u16> = format!("\"{}\"", clean_path)
-                .encode_utf16()
-                .chain(std::iter::once(0))
-                .collect();
             let bytes = std::slice::from_raw_parts(
                 value.as_ptr() as *const u8,
                 value.len() * std::mem::size_of::<u16>(),
@@ -48,19 +94,23 @@ pub fn set_autostart(enabled: bool) -> Result<(), String> {
                 .ok()
                 .map_err(|e| e.to_string());
 
-            // Hapus pencekalan disabled di StartupApproved\Run jika user pernah mematikan via Task Manager
-            let mut app_key = HKEY::default();
-            if RegOpenKeyExW(
-                HKEY_CURRENT_USER,
-                PCWSTR(approved_subkey.as_ptr()),
-                0,
-                KEY_SET_VALUE,
-                &mut app_key,
-            )
-            .is_ok()
-            {
-                let _ = RegDeleteValueW(app_key, PCWSTR(nama.as_ptr()));
-                let _ = RegCloseKey(app_key);
+            // Hapus pencekalan disabled di StartupApproved\Run jika user pernah
+            // mematikan via Task Manager. Hanya setelah Run benar-benar tertulis:
+            // kalau penulisan gagal, entri lama harus tetap dalam keadaan semula.
+            if set_res.is_ok() {
+                let mut app_key = HKEY::default();
+                if RegOpenKeyExW(
+                    HKEY_CURRENT_USER,
+                    PCWSTR(approved_subkey.as_ptr()),
+                    0,
+                    KEY_SET_VALUE,
+                    &mut app_key,
+                )
+                .is_ok()
+                {
+                    let _ = RegDeleteValueW(app_key, PCWSTR(nama.as_ptr()));
+                    let _ = RegCloseKey(app_key);
+                }
             }
 
             set_res
@@ -88,6 +138,11 @@ pub fn set_autostart(enabled: bool) -> Result<(), String> {
         let _ = RegCloseKey(key);
         hasil
     }
+}
+
+#[cfg(not(windows))]
+fn set_autostart_for(_exe: &std::path::Path, _enabled: bool) -> Result<(), String> {
+    Err("hanya didukung di Windows".into())
 }
 
 #[cfg(not(windows))]
@@ -164,8 +219,11 @@ pub fn autostart_enabled() -> bool {
             .is_ok()
                 && buf_size > 0
             {
-                // Nilai byte ganjil (misal 0x01 atau 0x03) menandakan status Disabled di Windows Explorer
-                if buf[0] & 1 != 0 {
+                // Nilai byte ganjil (misal 0x01 atau 0x03) menandakan status Disabled di Windows Explorer.
+                // Hanya berlaku bila nilainya benar-benar REG_BINARY; tipe lain berarti
+                // nilai itu ditulis oleh sesuatu yang bukan Task Manager — jangan ditafsirkan.
+                let is_binary = val_type == REG_BINARY;
+                if is_binary && buf[0] & 1 != 0 {
                     let _ = RegCloseKey(app_key);
                     return false;
                 }
@@ -294,6 +352,36 @@ mod tests {
         use windows::Win32::System::Threading::{GetCurrentProcess, SetProcessWorkingSetSize};
         let res = unsafe { SetProcessWorkingSetSize(GetCurrentProcess(), usize::MAX, usize::MAX) };
         assert!(res.is_ok(), "SetProcessWorkingSetSize failed: {:?}", res);
+    }
+
+    // Regresi 2026-11-22: harness test pernah mendaftarkan dirinya ke registry
+    // `Run` karena `Noktah::new` menyinkronkan autostart.
+    #[test]
+    fn binary_test_dikenali_agar_tidak_masuk_registry() {
+        use std::path::Path;
+        assert!(looks_like_test_binary(Path::new(
+            r"D:\noktah-develop\noktah\native\target\debug\deps\noktah_native-d2cb7e137558669b.exe"
+        )));
+        assert!(looks_like_test_binary(Path::new(
+            r"C:\x\target\release\deps\noktah_core-ab12cd.exe"
+        )));
+        assert!(looks_like_test_binary(Path::new(
+            "/home/u/target/debug/deps/noktah_hook-00ff.exe"
+        )));
+        assert!(!looks_like_test_binary(Path::new(
+            r"C:\Users\affan\Downloads\noktah-native.exe"
+        )));
+        assert!(!looks_like_test_binary(Path::new(
+            r"D:\noktah-develop\noktah\native\target\release\noktah-native.exe"
+        )));
+    }
+
+    // Jalur test tidak boleh menyentuh registry sama sekali.
+    #[test]
+    fn sync_autostart_tidak_menulis_saat_test() {
+        let sebelum = autostart_enabled();
+        sync_autostart(true);
+        assert_eq!(sebelum, autostart_enabled());
     }
 }
 
