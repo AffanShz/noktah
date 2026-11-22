@@ -3,6 +3,20 @@
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/),
 versi mengikuti [SemVer](https://semver.org/lang/id/).
 
+## [1.4.2] - 2026-11-22
+
+### Diperbaiki
+- **Autostart Gagal Saat Boot (`C:\Windows\System32`)** — Proses yang dijalankan Windows lewat registry `Run` mewarisi working directory `C:\Windows\System32`, sehingga penulisan file relatif gagal. Directory kerja kini dinormalisasi ke folder executable di awal `main()`.
+- **Pencekalan Task Manager Tidak Terhapus** — Menyalakan kembali *Start with Windows* kini ikut menghapus nilai disabled di `HKCU\...\Explorer\StartupApproved\Run`. Sebelumnya Windows tetap menolak menjalankan Noktah saat boot meski entri `Run` sudah ada, karena status disabled dari Task Manager tidak pernah disinkronkan.
+- **Status Autostart Salah Baca** — `autostart_enabled()` kini memeriksa byte status `StartupApproved` (hanya untuk nilai bertipe `REG_BINARY`), jadi sakelar di Setelan mencerminkan keadaan sebenarnya.
+- **Prefix Verbatim `\\?\` di Path Registry** — Path dari `current_exe()` dibersihkan dari prefix `\\?\` sebelum ditulis sebagai nilai `Run`, karena sebagian shell boot gagal mem-parse-nya.
+- **Build Test Mendaftarkan Dirinya Sebagai Autostart** — Konstruktor `Noktah::new` menyinkronkan registry `Run` setiap start, dan harness layout test memanggil konstruktor yang sama. Akibatnya setiap `cargo test` menulis path binary test (`target\debug\deps\noktah_native-<hash>.exe`) ke registry pengguna, lalu Windows menjalankan test suite saat boot. Sinkronisasi dipindah ke `main.rs` lewat `os::sync_autostart` yang dijaga `cfg!(test)` sekaligus deteksi nama binary test; `set_autostart` juga menolak path tersebut.
+- **Pembersihan `StartupApproved` Sebelum Penulisan Berhasil** — Nilai disabled kini hanya dihapus setelah penulisan `Run` benar-benar sukses. Dulu penghapusan berjalan walau penulisan gagal, menyisakan entri lama dalam keadaan aktif dengan path basi.
+- **Handle Registry Bocor** — Path executable disiapkan sebelum kunci `Run` dibuka, sehingga kegagalan `current_exe()` tidak lagi meninggalkan handle registry terbuka.
+
+### Diubah
+- **Test Regresi Autostart** — Dua test baru: deteksi nama binary test dan penegasan bahwa jalur test tidak menulis registry. Total 191 unit test (91 `noktah-core` + 100 `noktah-native`), naik dari 189.
+
 ## [1.4.1] - 2026-11-20
 
 ### Diperbaiki
