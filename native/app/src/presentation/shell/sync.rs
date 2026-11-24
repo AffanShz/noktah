@@ -283,6 +283,9 @@ impl Noktah {
     /// Menarik update dari server IPC Named Pipe dan sinkronisasi status agent Claude Code.
     pub(crate) fn poll_ipc(&mut self) {
         let now = chrono::Utc::now().timestamp_millis();
+        if self.custom_tiles.prune_expired(now) && self.custom_tiles.is_empty() {
+            self.system_tiles_mode = false;
+        }
 
         // 1. Auto-decay heartbeat: jika tidak ada aktivitas selama 45 detik dan tidak ada antrean izin,
         // reset agent.active ke false agar CPU Noktah kembali tidur 60s per frame
@@ -299,6 +302,39 @@ impl Noktah {
         while let Ok(event) = self.ipc.rx.try_recv() {
             match event {
                 crate::infrastructure::ipc::IpcEvent::HookReceived(payload) => {
+                    let ev_clean = payload.hook_event_name.trim().to_lowercase();
+
+                    // Tangani event custom tile tanpa mengubah state self.agent
+                    match ev_clean.as_str() {
+                        "tile" | "tile-set" | "tile_set" | "custom_tile" | "status_tile" => {
+                            if self.settings.custom_tiles_enabled {
+                                if let Some(tile) = payload.into_custom_tile(now) {
+                                    let _ = self.custom_tiles.upsert(tile, now);
+                                }
+                            }
+                            continue;
+                        }
+                        "tile-remove" | "tile_remove" | "tile-del" | "tile_del" => {
+                            let id = payload
+                                .tile_id
+                                .or(payload.tile_title)
+                                .unwrap_or_default();
+                            if !id.is_empty() {
+                                self.custom_tiles.remove(&id);
+                                if self.custom_tiles.is_empty() {
+                                    self.system_tiles_mode = false;
+                                }
+                            }
+                            continue;
+                        }
+                        "tile-clear" | "tile_clear" => {
+                            self.custom_tiles.clear();
+                            self.system_tiles_mode = false;
+                            continue;
+                        }
+                        _ => {}
+                    }
+
                     self.agent.updated_at = now;
                     if let Some(sid) = payload.session_id {
                         self.agent.session_id = sid;

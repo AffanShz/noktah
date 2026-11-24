@@ -432,6 +432,95 @@ pub struct AgentHookPayload {
     pub last_assistant_message: Option<String>,
     #[serde(default)]
     pub permission_suggestions: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tile: Option<crate::tile::CustomTile>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tile_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tile_title: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tile_value: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tile_subtitle: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tile_tone: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tile_progress: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tile_ttl_secs: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tile_pin_mini: Option<bool>,
+}
+
+impl AgentHookPayload {
+    /// Konversi payload hook menjadi CustomTile jika memuat informasi tile.
+    ///
+    /// Mendukung format bersarang (`tile`) dengan override opsional dari field `tile_*`,
+    /// maupun format flat `tile_*` langsung, dengan fallback `value` dari
+    /// `last_assistant_message` atau `prompt`.
+    pub fn into_custom_tile(&self, now_ms: i64) -> Option<crate::tile::CustomTile> {
+        let ev = self.hook_event_name.trim().to_lowercase();
+        let is_tile_event = matches!(
+            ev.as_str(),
+            "tile" | "tile-set" | "tile_set" | "custom_tile" | "status_tile"
+        );
+
+        let has_tile_indicator = self.tile.is_some()
+            || self.tile_id.is_some()
+            || self.tile_title.is_some()
+            || self.tile_value.is_some()
+            || self.tile_subtitle.is_some()
+            || self.tile_tone.is_some()
+            || self.tile_progress.is_some()
+            || self.tile_ttl_secs.is_some()
+            || self.tile_pin_mini.is_some()
+            || is_tile_event;
+
+        if !has_tile_indicator {
+            return None;
+        }
+
+        let mut tile = self.tile.clone().unwrap_or_default();
+
+        if let Some(id) = &self.tile_id {
+            tile.id = id.clone();
+        }
+        if let Some(title) = &self.tile_title {
+            tile.title = title.clone();
+        }
+        if let Some(val) = &self.tile_value {
+            tile.value = val.clone();
+        }
+        if let Some(sub) = &self.tile_subtitle {
+            tile.subtitle = Some(sub.clone());
+        }
+        if let Some(tone_str) = &self.tile_tone {
+            tile.tone = crate::tile::TileTone::parse(tone_str);
+        }
+        if let Some(prog) = self.tile_progress {
+            tile.progress = Some(prog);
+        }
+        if let Some(ttl) = self.tile_ttl_secs {
+            tile.ttl_secs = Some(ttl);
+        }
+        if let Some(pin) = self.tile_pin_mini {
+            tile.pin_mini = pin;
+        }
+
+        if tile.value.is_empty() {
+            if let Some(msg) = self
+                .last_assistant_message
+                .as_deref()
+                .or(self.prompt.as_deref())
+            {
+                if !msg.trim().is_empty() {
+                    tile.value = msg.trim().to_string();
+                }
+            }
+        }
+
+        Some(tile.normalized(now_ms))
+    }
 }
 
 #[cfg(test)]
@@ -645,5 +734,77 @@ mod tests {
         let raw = serde_json::to_string(&note).unwrap();
         let back: Scratchpad = serde_json::from_str(&raw).unwrap();
         assert_eq!(note, back);
+    }
+
+    #[test]
+    fn into_custom_tile_parsing_and_fallbacks() {
+        use crate::tile::TileTone;
+
+        // 1. Nested tile object
+        let payload1 = AgentHookPayload {
+            hook_event_name: "custom_tile".into(),
+            tile: Some(crate::tile::CustomTile {
+                id: "build".into(),
+                title: "Build".into(),
+                value: "Running".into(),
+                subtitle: Some("job #12".into()),
+                tone: TileTone::Warning,
+                progress: Some(0.4),
+                ttl_secs: Some(120),
+                updated_at_ms: 100,
+                pin_mini: true,
+            }),
+            ..Default::default()
+        };
+        let tile1 = payload1.into_custom_tile(200).expect("should parse nested tile");
+        assert_eq!(tile1.id, "build");
+        assert_eq!(tile1.title, "Build");
+        assert_eq!(tile1.value, "Running");
+        assert_eq!(tile1.subtitle.as_deref(), Some("job #12"));
+        assert_eq!(tile1.tone, TileTone::Warning);
+        assert_eq!(tile1.progress, Some(0.4));
+        assert_eq!(tile1.ttl_secs, Some(120));
+        assert_eq!(tile1.updated_at_ms, 100);
+        assert!(tile1.pin_mini);
+
+        // 2. Nested tile with flat overrides
+        let payload2 = AgentHookPayload {
+            hook_event_name: "tile".into(),
+            tile: Some(tile1.clone()),
+            tile_value: Some("Success".into()),
+            tile_tone: Some("success".into()),
+            tile_progress: Some(1.0),
+            ..Default::default()
+        };
+        let tile2 = payload2.into_custom_tile(300).expect("should apply overrides");
+        assert_eq!(tile2.id, "build");
+        assert_eq!(tile2.value, "Success");
+        assert_eq!(tile2.tone, TileTone::Success);
+        assert_eq!(tile2.progress, Some(1.0));
+
+        // 3. Flat fields with fallback to last_assistant_message for value
+        let payload3 = AgentHookPayload {
+            hook_event_name: "tile".into(),
+            tile_id: Some("deploy".into()),
+            last_assistant_message: Some("Deployed to prod".into()),
+            tile_tone: Some("accent".into()),
+            tile_pin_mini: Some(true),
+            ..Default::default()
+        };
+        let tile3 = payload3.into_custom_tile(400).expect("should parse flat fields");
+        assert_eq!(tile3.id, "deploy");
+        assert_eq!(tile3.title, "deploy");
+        assert_eq!(tile3.value, "Deployed to prod");
+        assert_eq!(tile3.tone, TileTone::Accent);
+        assert!(tile3.pin_mini);
+        assert_eq!(tile3.updated_at_ms, 400);
+
+        // 4. Non-tile payload returns None
+        let non_tile = AgentHookPayload {
+            hook_event_name: "userpromptsubmit".into(),
+            prompt: Some("hello".into()),
+            ..Default::default()
+        };
+        assert!(non_tile.into_custom_tile(500).is_none());
     }
 }

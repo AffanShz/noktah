@@ -180,6 +180,8 @@ pub struct Noktah {
     pub file_shelf: Vec<crate::presentation::widgets::ShelfFile>,
     pub last_audio_dev_check: Instant,
     pub last_audio_dev_name: Option<String>,
+    pub custom_tiles: noktah_core::TileStore,
+    pub(crate) system_tiles_mode: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -481,6 +483,8 @@ impl Noktah {
             file_shelf: Vec::new(),
             last_audio_dev_check: Instant::now() - std::time::Duration::from_secs(10),
             last_audio_dev_name: None,
+            custom_tiles: noktah_core::TileStore::default(),
+            system_tiles_mode: false,
         };
         if let Some(p) = app.resolve_default_page() {
             app.current_page = p;

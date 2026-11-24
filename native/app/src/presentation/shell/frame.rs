@@ -132,6 +132,15 @@ impl Noktah {
             if self.media.active && self.media.playing {
                 return Duration::from_millis(80);
             }
+            if self.current_page == NotchPage::System
+                && self.system_tiles_mode
+                && !self.custom_tiles.is_empty()
+            {
+                let now_utc = chrono::Utc::now().timestamp_millis();
+                if let Some(rem_ms) = self.custom_tiles.next_expiry_in_ms(now_utc) {
+                    return Duration::from_millis(rem_ms.clamp(16, 500));
+                }
+            }
             return Duration::from_millis(500);
         }
 
@@ -166,6 +175,14 @@ impl Noktah {
                 }
             } else {
                 tunggu = Duration::from_millis(16);
+            }
+        }
+
+        let now_utc = chrono::Utc::now().timestamp_millis();
+        if let Some(rem_ms) = self.custom_tiles.next_expiry_in_ms(now_utc) {
+            let d = Duration::from_millis(rem_ms.max(16));
+            if d < tunggu {
+                tunggu = d;
             }
         }
 
@@ -408,6 +425,12 @@ impl eframe::App for Noktah {
             .map(|(_, at)| at.elapsed().as_secs_f32() < 4.0)
             .unwrap_or(false);
         let media_in_mini = self.show_media_in_mini();
+
+        let now_utc_ms = chrono::Utc::now().timestamp_millis();
+        if self.custom_tiles.prune_expired(now_utc_ms) && self.custom_tiles.is_empty() {
+            self.system_tiles_mode = false;
+        }
+
         self.pill.target = if banner_active {
             340.0
         } else if peek && media_in_mini {
@@ -416,6 +439,8 @@ impl eframe::App for Noktah {
             self.settings.mini_width(true, self.has_lyrics())
         } else if self.agent.active && self.settings.mini_agent {
             260.0
+        } else if self.settings.custom_tiles_enabled && self.custom_tiles.pinned_mini().is_some() {
+            220.0
         } else {
             180.0
         };
