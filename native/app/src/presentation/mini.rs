@@ -44,6 +44,18 @@ pub struct MiniCtx<'a> {
     pub banner: Option<&'a str>,
     pub pending_approval_count: usize,
     pub focus_dnd_rem: Option<u32>,
+    pub custom_tile: Option<&'a noktah_core::CustomTile>,
+}
+
+/// Pemetaan TileTone ke Color32 yang sesuai tema atau semantik status.
+pub fn tone_color(tone: noktah_core::TileTone, theme: &Theme) -> Color32 {
+    match tone {
+        noktah_core::TileTone::Neutral => theme.ink,
+        noktah_core::TileTone::Accent => theme.accent,
+        noktah_core::TileTone::Success => Color32::from_rgb(34, 197, 94),
+        noktah_core::TileTone::Warning => Color32::from_rgb(245, 158, 11),
+        noktah_core::TileTone::Error => Color32::from_rgb(239, 68, 68),
+    }
 }
 
 const PAD: f32 = 20.0;
@@ -218,10 +230,10 @@ fn draw_minimal_pill(painter: &Painter, rect: Rect, ctx: &MiniCtx) {
     let theme = ctx.theme;
     let cy = rect.center().y;
 
-    let center_label = if let Some(banner) = ctx.banner {
-        banner.to_string()
+    let (center_label, custom_tone) = if let Some(banner) = ctx.banner {
+        (banner.to_string(), None)
     } else if ctx.agent.active {
-        if matches!(
+        let label = if matches!(
             ctx.agent.status,
             noktah_core::model::AgentStatus::AwaitingApproval(_)
         ) && ctx.pending_approval_count > 1
@@ -229,11 +241,19 @@ fn draw_minimal_pill(painter: &Painter, rect: Rect, ctx: &MiniCtx) {
             format!("Izin (1/{}) [Alt+Y/N]", ctx.pending_approval_count)
         } else {
             format_agent_status_label(&ctx.agent.status, &ctx.clock)
-        }
+        };
+        (label, None)
     } else if let Some(rem) = ctx.focus_dnd_rem {
-        format!("DND {:02}:{:02} • {}", rem / 60, rem % 60, ctx.clock)
+        (format!("DND {:02}:{:02} • {}", rem / 60, rem % 60, ctx.clock), None)
+    } else if let Some(tile) = ctx.custom_tile {
+        let label = if tile.value.is_empty() {
+            tile.title.clone()
+        } else {
+            format!("{}: {}", tile.title, tile.value)
+        };
+        (label, Some(tile.tone))
     } else {
-        ctx.clock.clone()
+        (ctx.clock.clone(), None)
     };
 
     // 1. Lencana kecil di kiri (`.art.sm` 24×24, radius 8) - Maskot 2 mata interaktif Noki
@@ -285,6 +305,8 @@ fn draw_minimal_pill(painter: &Painter, rect: Rect, ctx: &MiniCtx) {
     if max_w > 10.0 {
         let text_color = if ctx.banner.is_some() {
             theme.accent
+        } else if let Some(tone) = custom_tone {
+            tone_color(tone, theme)
         } else {
             theme.ink
         };
@@ -302,6 +324,23 @@ fn draw_minimal_pill(painter: &Painter, rect: Rect, ctx: &MiniCtx) {
     // Aura status agent di dasar pill saat minimal
     if ctx.agent.active {
         agent_aura(painter, rect, ctx);
+    } else if ctx.banner.is_none() && ctx.focus_dnd_rem.is_none() {
+        if let Some(tile) = ctx.custom_tile {
+            if let Some(p) = tile.progress {
+                if let Some((jalur, _)) = progress_geometry(rect) {
+                    let color = tone_color(tile.tone, theme);
+                    let w = (jalur.width() * p.clamp(0.0, 1.0)).max(0.0);
+                    if w > 0.0 {
+                        let prog_rect = Rect::from_min_size(jalur.min, egui::vec2(w, jalur.height()));
+                        painter.rect_filled(
+                            prog_rect,
+                            egui::Rounding::same(1.5),
+                            with_alpha(color, 220.0 * ctx.alpha),
+                        );
+                    }
+                }
+            }
+        }
     }
 }
 

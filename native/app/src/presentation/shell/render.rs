@@ -463,6 +463,11 @@ impl Noktah {
                         } else {
                             None
                         },
+                        custom_tile: if self.settings.custom_tiles_enabled {
+                            self.custom_tiles.pinned_mini()
+                        } else {
+                            None
+                        },
                     };
                     // Klip aura dilonggarkan 6 px ke bawah saja (rect tata
                     // letak tetap sama supaya isi baris tidak bergeser).
