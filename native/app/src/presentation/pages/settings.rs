@@ -136,6 +136,18 @@ impl Noktah {
             widgets::card_divider(ui);
             widgets::row_desc(
                 ui,
+                i18n::t(lang, "settings.custom_tiles"),
+                i18n::t(lang, "settings.custom_tiles_desc"),
+                &theme,
+                |ui| {
+                    if widgets::toggle(ui, &mut self.settings.custom_tiles_enabled, &theme) {
+                        self.touch_settings();
+                    }
+                },
+            );
+            widgets::card_divider(ui);
+            widgets::row_desc(
+                ui,
                 i18n::t(lang, "settings.monitor_mode"),
                 "Pilih layar penempatan (Layar Utama atau Ikuti Kursor)",
                 &theme,
@@ -1433,6 +1445,12 @@ Pastikan aplikasi Noktah sedang berjalan.
 
 6. Mode stdin pipe (membaca output perintah lain):
    cargo check | noktah-hook -s working -m "Memeriksa kode"
+
+7. Mengirim custom status tile:
+   noktah-hook tile cpu "85%" "High load" --tone warning
+   noktah-hook tile build "Passed" --tone success --progress 100 --pin-mini
+   noktah-hook tile-remove cpu
+   noktah-hook tile-clear
 "#;
 
 const JSON_ANTIGRAVITY_HOOKS: &str = r#"{

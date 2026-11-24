@@ -159,6 +159,9 @@ STATUS / EVENT YANG DIDUKUNG:
     error, fail, failed            Maskot merah (#EF4444) menggelengkan kepala
     idle, ready, reset             Maskot tenang bernapas mengikuti kursor
     approval, permission, ask      Memicu modal persetujuan izin di notch Noktah
+    tile, tile-set                 Kirim/perbarui status tile kustom ke halaman Sistem / Mini
+    tile-remove, tile-del          Hapus tile kustom berdasarkan ID
+    tile-clear                     Bersihkan seluruh tile kustom
 
 OPSI:
     -s, --status, -e, --event <EV> Nama status atau event
@@ -168,6 +171,13 @@ OPSI:
     -i, --input <JSON_ATAU_TEKS>   Payload input tool (JSON atau teks biasa)
     -d, --duration <MS>            Durasi pengerjaan dalam milidetik
         --title <TITLE>            Judul sesi atau nama agent pemanggil
+        --id <ID>                  ID tile status kustom
+    -v, --value <VALUE>            Nilai status tile (misal: "95%", "OK")
+        --subtitle <SUB>           Subjudul atau deskripsi singkat tile
+        --tone <TONE>              Warna/nuansa tile: neutral, accent, success, warning, error
+        --progress <PCT>           Progres numerik 0.0-1.0 atau 0-100 (misal: 75)
+        --ttl <DETIK>              Masa berlaku tile sebelum kedaluwarsa otomatis (detik)
+        --pin-mini                 Sematkan tile ini ke pill mini Noktah saat idle
     -h, --help                     Tampilkan panduan bantuan ini
 
 CONTOH PENGGUNAAN:
@@ -175,6 +185,10 @@ CONTOH PENGGUNAAN:
     noktah-hook done "Seluruh 169 unit test lulus"
     noktah-hook error "Kompilasi gagal di main.rs"
     noktah-hook idle
+    noktah-hook tile cpu "85%" "High load" --tone warning
+    noktah-hook tile build "Passed" --tone success --progress 100 --pin-mini
+    noktah-hook tile-remove cpu
+    noktah-hook tile-clear
     noktah-hook --status working --tool "npm run build" --title "Frontend Build"
     noktah-hook --status approval --tool "rm -rf" --input "target/"
 "#
@@ -182,8 +196,31 @@ CONTOH PENGGUNAAN:
     );
 }
 
-fn main() {
-    let args: Vec<String> = std::env::args().collect();
+/// Membangun payload JSON murni dari argumen CLI dan stdin JSON.
+/// Mengembalikan None jika argumen meminta bantuan (--help, -h, /?).
+pub fn build_payload_from_args(
+    args: &[String],
+    stdin_payload: serde_json::Value,
+) -> Option<serde_json::Value> {
+    let actual_args = if !args.is_empty()
+        && (args[0].ends_with("noktah-hook")
+            || args[0].ends_with("noktah-hook.exe")
+            || (args.len() > 1
+                && !args[0].starts_with('-')
+                && !args[0].starts_with('/')
+                && (args[0].contains('/') || args[0].contains('\\'))))
+    {
+        &args[1..]
+    } else {
+        args
+    };
+
+    for arg in actual_args {
+        if arg == "--help" || arg == "-h" || arg == "/?" {
+            return None;
+        }
+    }
+
     let mut options_event: Option<String> = None;
     let mut options_tool: Option<String> = None;
     let mut options_message: Option<String> = None;
@@ -192,41 +229,46 @@ fn main() {
     let mut options_duration: Option<u64> = None;
     let mut options_title: Option<String> = None;
 
-    let mut i = 1;
-    while i < args.len() {
-        let arg = &args[i];
+    let mut options_tile_id: Option<String> = None;
+    let mut options_tile_title: Option<String> = None;
+    let mut options_tile_value: Option<String> = None;
+    let mut options_tile_subtitle: Option<String> = None;
+    let mut options_tile_tone: Option<String> = None;
+    let mut options_tile_progress: Option<f32> = None;
+    let mut options_tile_ttl: Option<u64> = None;
+    let mut options_tile_pin_mini: Option<bool> = None;
+
+    let mut i = 0;
+    while i < actual_args.len() {
+        let arg = &actual_args[i];
         match arg.as_str() {
-            "--help" | "-h" | "/?" => {
-                print_help();
-                return;
-            }
             "--status" | "-s" | "--event" | "-e" => {
-                if i + 1 < args.len() {
-                    options_event = Some(args[i + 1].clone());
+                if i + 1 < actual_args.len() {
+                    options_event = Some(actual_args[i + 1].clone());
                     i += 1;
                 }
             }
             "--tool" | "-t" => {
-                if i + 1 < args.len() {
-                    options_tool = Some(args[i + 1].clone());
+                if i + 1 < actual_args.len() {
+                    options_tool = Some(actual_args[i + 1].clone());
                     i += 1;
                 }
             }
             "--message" | "-m" | "--summary" => {
-                if i + 1 < args.len() {
-                    options_message = Some(args[i + 1].clone());
+                if i + 1 < actual_args.len() {
+                    options_message = Some(actual_args[i + 1].clone());
                     i += 1;
                 }
             }
             "--prompt" | "-p" => {
-                if i + 1 < args.len() {
-                    options_prompt = Some(args[i + 1].clone());
+                if i + 1 < actual_args.len() {
+                    options_prompt = Some(actual_args[i + 1].clone());
                     i += 1;
                 }
             }
             "--input" | "-i" => {
-                if i + 1 < args.len() {
-                    let val_str = &args[i + 1];
+                if i + 1 < actual_args.len() {
+                    let val_str = &actual_args[i + 1];
                     let val = serde_json::from_str(val_str)
                         .unwrap_or_else(|_| serde_json::Value::String(val_str.clone()));
                     options_input = Some(val);
@@ -234,28 +276,104 @@ fn main() {
                 }
             }
             "--duration" | "-d" => {
-                if i + 1 < args.len() {
-                    options_duration = args[i + 1].parse().ok();
+                if i + 1 < actual_args.len() {
+                    options_duration = actual_args[i + 1].parse().ok();
                     i += 1;
                 }
             }
             "--title" => {
-                if i + 1 < args.len() {
-                    options_title = Some(args[i + 1].clone());
+                if i + 1 < actual_args.len() {
+                    options_title = Some(actual_args[i + 1].clone());
                     i += 1;
                 }
+            }
+            "--id" => {
+                if i + 1 < actual_args.len() {
+                    options_tile_id = Some(actual_args[i + 1].clone());
+                    i += 1;
+                }
+            }
+            "--value" | "-v" => {
+                if i + 1 < actual_args.len() {
+                    options_tile_value = Some(actual_args[i + 1].clone());
+                    i += 1;
+                }
+            }
+            "--subtitle" => {
+                if i + 1 < actual_args.len() {
+                    options_tile_subtitle = Some(actual_args[i + 1].clone());
+                    i += 1;
+                }
+            }
+            "--tone" => {
+                if i + 1 < actual_args.len() {
+                    options_tile_tone = Some(actual_args[i + 1].clone());
+                    i += 1;
+                }
+            }
+            "--progress" => {
+                if i + 1 < actual_args.len() {
+                    if let Ok(p) = actual_args[i + 1].parse::<f32>() {
+                        if p.is_finite() {
+                            let norm = if p > 1.0 && p <= 100.0 { p / 100.0 } else { p };
+                            options_tile_progress = Some(norm.clamp(0.0, 1.0));
+                        }
+                    }
+                    i += 1;
+                }
+            }
+            "--ttl" => {
+                if i + 1 < actual_args.len() {
+                    options_tile_ttl = actual_args[i + 1].parse().ok();
+                    i += 1;
+                }
+            }
+            "--pin-mini" => {
+                options_tile_pin_mini = Some(true);
             }
             pos if !pos.starts_with('-') => {
                 if options_event.is_none() {
                     options_event = Some(pos.to_string());
-                } else if options_tool.is_none() && options_message.is_none() && options_prompt.is_none() {
+                } else {
                     let ev_lower = options_event.as_deref().unwrap_or("").to_lowercase();
-                    if matches!(ev_lower.as_str(), "working" | "tool" | "busy" | "run" | "running" | "build" | "pretooluse") {
-                        options_tool = Some(pos.to_string());
-                    } else if matches!(ev_lower.as_str(), "thinking" | "prompt" | "query" | "plan" | "userpromptsubmit") {
-                        options_prompt = Some(pos.to_string());
-                    } else {
-                        options_message = Some(pos.to_string());
+                    if matches!(
+                        ev_lower.as_str(),
+                        "tile" | "tile-set" | "tile_set" | "custom_tile" | "status_tile"
+                    ) {
+                        if options_tile_id.is_none() {
+                            options_tile_id = Some(pos.to_string());
+                            if options_tile_title.is_none() {
+                                options_tile_title = Some(pos.to_string());
+                            }
+                        } else if options_tile_value.is_none() {
+                            options_tile_value = Some(pos.to_string());
+                        } else if options_tile_subtitle.is_none() {
+                            options_tile_subtitle = Some(pos.to_string());
+                        }
+                    } else if matches!(
+                        ev_lower.as_str(),
+                        "tile-remove" | "tile_remove" | "tile-del" | "tile_del"
+                    ) {
+                        if options_tile_id.is_none() {
+                            options_tile_id = Some(pos.to_string());
+                        }
+                    } else if options_tool.is_none()
+                        && options_message.is_none()
+                        && options_prompt.is_none()
+                    {
+                        if matches!(
+                            ev_lower.as_str(),
+                            "working" | "tool" | "busy" | "run" | "running" | "build" | "pretooluse"
+                        ) {
+                            options_tool = Some(pos.to_string());
+                        } else if matches!(
+                            ev_lower.as_str(),
+                            "thinking" | "prompt" | "query" | "plan" | "userpromptsubmit"
+                        ) {
+                            options_prompt = Some(pos.to_string());
+                        } else {
+                            options_message = Some(pos.to_string());
+                        }
                     }
                 }
             }
@@ -264,29 +382,12 @@ fn main() {
         i += 1;
     }
 
-    let is_stdin_piped = !stdin().is_terminal();
-    let mut payload: serde_json::Value = if is_stdin_piped {
-        let mut stdin_bytes = Vec::new();
-        let _ = stdin().read_to_end(&mut stdin_bytes);
-        if !stdin_bytes.is_empty() {
-            serde_json::from_slice(&stdin_bytes).unwrap_or_else(|_| serde_json::json!({}))
-        } else {
-            serde_json::json!({})
-        }
-    } else {
-        serde_json::json!({})
-    };
-
-    // Jika berjalan interaktif di terminal tanpa stdin dan tanpa argumen, tampilkan bantuan
-    if !is_stdin_piped && options_event.is_none() {
-        print_help();
-        return;
+    let mut payload = stdin_payload;
+    if !payload.is_object() {
+        payload = serde_json::json!({});
     }
 
-    // Gabungkan opsi CLI ke dalam payload JSON
     if let Some(obj) = payload.as_object_mut() {
-        // Normalisasi format payload Antigravity (`toolCall: { name, args }`)
-        // ke field standar Noktah (`tool_name`, `tool_input`) jika belum ada.
         if !obj.contains_key("tool_name") {
             if let Some(tc) = obj.get("toolCall").and_then(|v| v.as_object()).cloned() {
                 if let Some(name) = tc.get("name").cloned() {
@@ -319,7 +420,10 @@ fn main() {
             obj.insert("duration_ms".to_string(), serde_json::Value::from(dur));
         }
         if let Some(title) = options_title {
-            obj.insert("session_title".to_string(), serde_json::Value::String(title));
+            obj.insert("session_title".to_string(), serde_json::Value::String(title.clone()));
+            if options_tile_title.is_none() {
+                options_tile_title = Some(title);
+            }
         } else if !obj
             .get("session_title")
             .and_then(|v| v.as_str())
@@ -346,6 +450,63 @@ fn main() {
                 obj.insert("session_title".to_string(), serde_json::Value::String(title));
             }
         }
+
+        if let Some(id) = options_tile_id {
+            obj.insert("tile_id".to_string(), serde_json::Value::String(id));
+        }
+        if let Some(title) = options_tile_title {
+            obj.insert("tile_title".to_string(), serde_json::Value::String(title));
+        }
+        if let Some(val) = options_tile_value {
+            obj.insert("tile_value".to_string(), serde_json::Value::String(val));
+        }
+        if let Some(sub) = options_tile_subtitle {
+            obj.insert("tile_subtitle".to_string(), serde_json::Value::String(sub));
+        }
+        if let Some(tone) = options_tile_tone {
+            obj.insert("tile_tone".to_string(), serde_json::Value::String(tone));
+        }
+        if let Some(prog) = options_tile_progress {
+            obj.insert("tile_progress".to_string(), serde_json::json!(prog));
+        }
+        if let Some(ttl) = options_tile_ttl {
+            obj.insert("tile_ttl_secs".to_string(), serde_json::json!(ttl));
+        }
+        if let Some(pin) = options_tile_pin_mini {
+            obj.insert("tile_pin_mini".to_string(), serde_json::Value::Bool(pin));
+        }
+    }
+
+    Some(payload)
+}
+
+fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    let is_stdin_piped = !stdin().is_terminal();
+    let stdin_payload: serde_json::Value = if is_stdin_piped {
+        let mut stdin_bytes = Vec::new();
+        let _ = stdin().read_to_end(&mut stdin_bytes);
+        if !stdin_bytes.is_empty() {
+            serde_json::from_slice(&stdin_bytes).unwrap_or_else(|_| serde_json::json!({}))
+        } else {
+            serde_json::json!({})
+        }
+    } else {
+        serde_json::json!({})
+    };
+
+    let payload = match build_payload_from_args(&args, stdin_payload) {
+        Some(p) => p,
+        None => {
+            print_help();
+            return;
+        }
+    };
+
+    // Jika berjalan interaktif di terminal tanpa stdin dan tanpa hook_event_name, tampilkan bantuan
+    if !is_stdin_piped && payload.get("hook_event_name").is_none() {
+        print_help();
+        return;
     }
 
     let ev = payload
@@ -435,4 +596,88 @@ fn main() {
 
     unsafe { let _ = CloseHandle(pipe); }
     std::process::exit(0);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn help_flags_return_none() {
+        assert!(build_payload_from_args(&["--help".into()], serde_json::json!({})).is_none());
+        assert!(build_payload_from_args(&["-h".into()], serde_json::json!({})).is_none());
+        assert!(build_payload_from_args(&["/?".into()], serde_json::json!({})).is_none());
+        assert!(build_payload_from_args(&["noktah-hook.exe".into(), "--help".into()], serde_json::json!({})).is_none());
+    }
+
+    #[test]
+    fn positional_tile_args() {
+        let args = vec![
+            "tile".into(),
+            "cpu".into(),
+            "85%".into(),
+            "High load".into(),
+        ];
+        let p = build_payload_from_args(&args, serde_json::json!({})).expect("should build payload");
+        assert_eq!(p["hook_event_name"], "tile");
+        assert_eq!(p["tile_id"], "cpu");
+        assert_eq!(p["tile_title"], "cpu");
+        assert_eq!(p["tile_value"], "85%");
+        assert_eq!(p["tile_subtitle"], "High load");
+    }
+
+    #[test]
+    fn tile_flags_parsing_and_progress_normalization() {
+        let args = vec![
+            "--status".into(),
+            "tile-set".into(),
+            "--id".into(),
+            "build".into(),
+            "-v".into(),
+            "Passed".into(),
+            "--tone".into(),
+            "success".into(),
+            "--progress".into(),
+            "85.0".into(),
+            "--ttl".into(),
+            "120".into(),
+            "--pin-mini".into(),
+        ];
+        let p = build_payload_from_args(&args, serde_json::json!({})).expect("should build payload");
+        assert_eq!(p["hook_event_name"], "tile-set");
+        assert_eq!(p["tile_id"], "build");
+        assert_eq!(p["tile_value"], "Passed");
+        assert_eq!(p["tile_tone"], "success");
+        assert!((p["tile_progress"].as_f64().unwrap() - 0.85).abs() < 1e-4);
+        assert_eq!(p["tile_ttl_secs"], 120);
+        assert_eq!(p["tile_pin_mini"], true);
+    }
+
+    #[test]
+    fn tile_remove_and_clear() {
+        let remove_args = vec!["tile-remove".into(), "cpu".into()];
+        let p1 = build_payload_from_args(&remove_args, serde_json::json!({})).unwrap();
+        assert_eq!(p1["hook_event_name"], "tile-remove");
+        assert_eq!(p1["tile_id"], "cpu");
+
+        let clear_args = vec!["tile-clear".into()];
+        let p2 = build_payload_from_args(&clear_args, serde_json::json!({})).unwrap();
+        assert_eq!(p2["hook_event_name"], "tile-clear");
+    }
+
+    #[test]
+    fn merge_with_stdin_json() {
+        let stdin = serde_json::json!({
+            "cwd": "C:\\projects\\demo",
+            "tile": {
+                "id": "inner",
+                "value": "initial"
+            }
+        });
+        let args = vec!["tile".into(), "--id".into(), "override_id".into()];
+        let p = build_payload_from_args(&args, stdin).unwrap();
+        assert_eq!(p["tile_id"], "override_id");
+        assert_eq!(p["tile"]["id"], "inner");
+        assert_eq!(p["session_title"], "demo");
+    }
 }

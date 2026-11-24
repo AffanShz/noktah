@@ -413,6 +413,9 @@ pub struct Settings {
     /// Menampilkan HUD banner saat perangkat audio beralih / tersambung.
     #[serde(default = "default_true")]
     pub audio_hud_enabled: bool,
+    /// Menerima custom status tile dari noktah-hook.
+    #[serde(default = "default_true")]
+    pub custom_tiles_enabled: bool,
 }
 
 impl Default for Settings {
@@ -471,6 +474,7 @@ impl Default for Settings {
             calendar_ics_path: String::new(),
             file_shelf_enabled: true,
             audio_hud_enabled: true,
+            custom_tiles_enabled: true,
         }
     }
 }

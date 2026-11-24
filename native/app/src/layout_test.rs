@@ -1449,4 +1449,186 @@ mod tests {
         assert_eq!(upcoming[1].summary, "Upcoming Meeting");
         assert_eq!(upcoming[1].relative_time_label(now_sec), "1 jam lagi");
     }
+
+    #[test]
+    fn test_ipc_custom_tiles_lifecycle_without_mutating_agent() {
+        use crate::app::Noktah;
+        use crate::infrastructure::ipc::IpcEvent;
+        use noktah_core::model::{AgentHookPayload, AgentStatus};
+        use noktah_core::tile::TileTone;
+        use std::sync::mpsc::channel;
+
+        let ctx = egui::Context::default();
+        let hover = crate::infrastructure::platform::Hover::new(false);
+        let mut app = Noktah::new("test".to_string(), hover, &ctx);
+        app.settings = noktah_core::Settings::default();
+
+        let (tx, rx) = channel();
+        app.ipc.rx = rx;
+
+        // Inisialisasi state awal agent: tidak aktif dan idle
+        app.agent.active = false;
+        app.agent.status = AgentStatus::Idle;
+        let initial_updated = app.agent.updated_at;
+
+        // 1. Kirim event tile upsert
+        let payload_upsert = AgentHookPayload {
+            hook_event_name: "tile".into(),
+            tile_id: Some("deploy".into()),
+            tile_value: Some("v1.5.0".into()),
+            tile_tone: Some("success".into()),
+            tile_ttl_secs: Some(3600),
+            tile_pin_mini: Some(true),
+            ..Default::default()
+        };
+        tx.send(IpcEvent::HookReceived(payload_upsert)).unwrap();
+        app.poll_ipc();
+
+        assert_eq!(app.custom_tiles.len(), 1);
+        let tile = &app.custom_tiles.items()[0];
+        assert_eq!(tile.id, "deploy");
+        assert_eq!(tile.value, "v1.5.0");
+        assert_eq!(tile.tone, TileTone::Success);
+        assert!(tile.pin_mini);
+        // Pastikan agent sama sekali tidak bermutasi
+        assert!(!app.agent.active);
+        assert_eq!(app.agent.status, AgentStatus::Idle);
+        assert_eq!(app.agent.updated_at, initial_updated);
+
+        // 2. Kirim event tile kedua
+        let payload_upsert2 = AgentHookPayload {
+            hook_event_name: "tile-set".into(),
+            tile_id: Some("cpu".into()),
+            tile_value: Some("42%".into()),
+            tile_subtitle: Some("normal".into()),
+            tile_tone: Some("accent".into()),
+            ..Default::default()
+        };
+        tx.send(IpcEvent::HookReceived(payload_upsert2)).unwrap();
+        app.poll_ipc();
+        assert_eq!(app.custom_tiles.len(), 2);
+        assert!(!app.agent.active);
+
+        // 3. Kirim event tile-remove
+        let payload_remove = AgentHookPayload {
+            hook_event_name: "tile-remove".into(),
+            tile_id: Some("deploy".into()),
+            ..Default::default()
+        };
+        tx.send(IpcEvent::HookReceived(payload_remove)).unwrap();
+        app.poll_ipc();
+        assert_eq!(app.custom_tiles.len(), 1);
+        assert_eq!(app.custom_tiles.items()[0].id, "cpu");
+        assert!(!app.agent.active);
+
+        // 4. Kirim event tile-clear
+        let payload_clear = AgentHookPayload {
+            hook_event_name: "tile-clear".into(),
+            ..Default::default()
+        };
+        tx.send(IpcEvent::HookReceived(payload_clear)).unwrap();
+        app.poll_ipc();
+        assert!(app.custom_tiles.is_empty());
+        assert!(!app.system_tiles_mode);
+        assert!(!app.agent.active);
+
+        // 5. Uji TTL expiry via poll_ipc
+        let now_utc = chrono::Utc::now().timestamp_millis();
+        let short_tile = noktah_core::CustomTile {
+            id: "short".into(),
+            title: "Short".into(),
+            value: "10s".into(),
+            ttl_secs: Some(1),
+            updated_at_ms: now_utc - 2_000,
+            ..Default::default()
+        };
+        assert!(app.custom_tiles.upsert(short_tile, now_utc - 2_000));
+        assert_eq!(app.custom_tiles.len(), 1);
+        app.system_tiles_mode = true;
+
+        app.poll_ipc();
+        assert!(app.custom_tiles.is_empty());
+        assert!(!app.system_tiles_mode);
+        assert!(!app.agent.active);
+    }
+
+    #[test]
+    fn test_system_page_custom_tiles_fit() {
+        use crate::app::Noktah;
+        use crate::presentation::layout;
+        use noktah_core::tile::{CustomTile, TileTone};
+
+        egui::__run_test_ui(|ui| {
+            let ctx = ui.ctx().clone();
+            crate::presentation::fonts::install(&ctx);
+
+            let hover = crate::infrastructure::platform::Hover::new(false);
+            let mut app = Noktah::new("test_renderer".to_string(), hover, &ctx);
+            app.settings = noktah_core::Settings::default();
+            app.settings.custom_tiles_enabled = true;
+            app.system_tiles_mode = true;
+
+            let area = egui::Rect::from_min_size(
+                egui::pos2(0.0, 0.0),
+                egui::vec2(layout::OPEN_W, layout::OPEN_H),
+            );
+            let content_rect = layout::content_rect(
+                area,
+                16.0,
+                crate::presentation::style::S2,
+            );
+            let limit_y = content_rect.bottom();
+
+            for count in [1, 3, 5] {
+                app.custom_tiles.clear();
+                let now_ms = 1_000_000;
+                for i in 1..=count {
+                    let tile = CustomTile {
+                        id: format!("tile-{i}"),
+                        title: format!("Custom Metric {i}"),
+                        value: format!("{}%", i * 20),
+                        subtitle: if i % 2 == 0 { Some(format!("sub-{i}")) } else { None },
+                        tone: match i % 4 {
+                            0 => TileTone::Success,
+                            1 => TileTone::Accent,
+                            2 => TileTone::Warning,
+                            _ => TileTone::Error,
+                        },
+                        progress: if i % 2 == 1 { Some(i as f32 * 0.2) } else { None },
+                        ttl_secs: Some(3600),
+                        updated_at_ms: now_ms,
+                        pin_mini: i == 1,
+                    };
+                    app.custom_tiles.upsert(tile, now_ms);
+                }
+                assert_eq!(app.custom_tiles.len(), count);
+
+                let mut page_ui = ui.new_child(
+                    egui::UiBuilder::new()
+                        .max_rect(content_rect)
+                        .layout(egui::Layout::top_down(egui::Align::LEFT)),
+                );
+                page_ui.set_clip_rect(content_rect);
+
+                app.draw_page_system(&mut page_ui, content_rect);
+
+                let min_rect = page_ui.min_rect();
+                println!(
+                    "System Page with {} custom tiles: bottom={}, limit={}, diff={}",
+                    count,
+                    min_rect.bottom(),
+                    limit_y,
+                    min_rect.bottom() - limit_y
+                );
+                assert!(
+                    min_rect.bottom() <= limit_y + 0.5,
+                    "System Page with {} tiles overflows by {}px! (bottom={}, limit={})",
+                    count,
+                    min_rect.bottom() - limit_y,
+                    min_rect.bottom(),
+                    limit_y
+                );
+            }
+        });
+    }
 }
