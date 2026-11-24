@@ -3,6 +3,14 @@
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/),
 versi mengikuti [SemVer](https://semver.org/lang/id/).
 
+## [1.5.0] - 2026-11-25
+
+### Ditambahkan
+- **Custom Status Tiles via `noktah-hook`** — Skema payload IPC baru (`noktah-core::tile`) yang mendukung hingga 6 kartu metrik/status kustom (`CustomTile`, `TileTone`, `TileStore`) tanpa mengganggu state agent Claude Code/Antigravity.
+- **Perintah CLI Tile di `noktah-hook`** — Dukungan event `tile`, `tile-set`, `tile-remove`, dan `tile-clear` beserta opsi `--id`, `-v`/`--value`, `--subtitle`, `--tone`, `--progress` (normalisasi 0–100% atau 0.0–1.0), `--ttl`, dan `--pin-mini` untuk menyematkan tile ke pill minimal.
+- **Switcher Halaman `SYSTEM` & Pill Minimal** — Toggle cepat `System | Tiles (N)` dan tombol `Clear` / hapus per kartu di halaman `System`, penjadwalan kadaluwarsa TTL akurat di `next_wake()`, tampilan ringkas di pill minimal saat idle dengan aura progres 3 px, serta sakelar `custom_tiles_enabled` di *Settings → Display*.
+- **Unit & Layout Test Baru** — Penambahan 18 test baru (`102 noktah-core` + `5 noktah-hook` + `102 noktah-native`, total 209 test lulus).
+
 ## [1.4.2] - 2026-11-22
 
 ### Diperbaiki

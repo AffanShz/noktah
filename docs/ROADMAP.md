@@ -6,8 +6,9 @@ Legenda usaha: 🟢 beberapa jam · 🟡 beberapa hari · 🔴 butuh interop Win
 
 ---
 
-## Sudah selesai (`v1.0.0` – `v1.4.0`)
+## Sudah selesai (`v1.0.0` – `v1.5.0`)
 
+- **Custom Status Tiles via `noktah-hook` (`v1.5.0`)** — skema IPC `CustomTile`/`TileStore` (maks 6 tile, TTL otomatis di `next_wake`, 5 nada status), perintah CLI `noktah-hook tile` / `tile-remove` / `tile-clear`, penyematan di pill minimal (`--pin-mini`), dan switcher kartu di halaman `System`.
 - **Aplikasi Rust native (`egui`/`eframe`)** — tanpa WebView/runtime tambahan, terbagi menjadi `noktah-core`, `noktah-native`, dan `noktah-hook`.
 - **Dynamic Island & Morphing** — kurva spring terkalibrasi ([MOTION.md](MOTION.md)), squircle, liquid ears, pill minimized elastis yang dapat dikustomisasi (termasuk `mini_idle_on_pause` saat audio dijeda), serta hover intent.
 - **Dock 7-Halaman & Kustomisasi** — Home (SMTC + Day Progress + kuota Antigravity), Music (SMTC + lirik tersinkron multi-provider LRCLIB/BetterLyrics/NetEase/KuGou + seekable lyrics + aksen album dinamis), Focus (Pomodoro dinamis + Focus DND + rekap 7 hari), Tasks (pengingat + auto-banner + Scratchpad autosave + File Drop Shelf), System (CPU/RAM/cuaca Open-Meteo), Ask (AI chat streaming 6 provider + Quick AI Actions), dan Agent (maskot Noki + gaze tracking + `noktah-hook` universal).
@@ -17,12 +18,11 @@ Legenda usaha: 🟢 beberapa jam · 🟡 beberapa hari · 🔴 butuh interop Win
 
 ---
 
-## `v2.0.0` — Distribusi Terpercaya & Ekosistem Ekstensibel
+## Selanjutnya (`v1.6.0` – `v2.0.0`)
 
-*Fokus: distribusi publik tanpa friksi dan ekstensibilitas pihak pengguna.*
+*Fokus: distribusi publik tanpa friksi dan penyempurnaan visual kaca.*
 
 - **Code Signing & `winget`** — penandatanganan digital biner rilis di CI untuk menghindari peringatan SmartScreen serta paket `winget` dengan registrasi `PATH` otomatis bagi `noktah-hook.exe`.
-- **Custom Status Tile via `noktah-hook`** — skema payload IPC agar skrip pengguna dapat menaruh status/metrik kustom di notch (mis. status CI, container, atau profil daya).
 - **Liquid Glass GPU Shader Stabil & Preset Tema** — penyempurnaan mode kaca penuh dan impor/ekspor preset tampilan.
 
 ---
