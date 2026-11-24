@@ -2,22 +2,28 @@
 //!
 //! Acrylic DWM sudah dicoba dan gagal pada jendela ber-alpha per piksel
 //! (hasilnya kotak hitam). Jalur yang dipakai sekarang: ambil isi layar di
-//! belakang notch, perkecil 1/8, blur dengan kotak blur, lalu gambar sebagai
-//! tekstur latar. Perkecilan itu sendiri sudah menghilangkan detail, jadi dua
-//! lintasan blur sudah cukup dan biayanya di bawah satu milidetik.
+//! belakang notch, perkecil 1/8, inpaint jejak pill agar tidak ada bayangan
+//! gelap, blur dengan kotak blur, lalu atur saturasi warna.
 
 use eframe::egui;
 
-/// Menangkap area layar dan mengembalikannya sudah dalam keadaan kabur.
+/// Menangkap area layar dan mengembalikannya sudah dalam keadaan kabur dan berpenyesuaian saturasi.
 #[cfg(windows)]
-pub fn capture(x: i32, y: i32, w: i32, h: i32) -> Option<egui::ColorImage> {
+pub fn capture(
+    x: i32,
+    y: i32,
+    w: i32,
+    h: i32,
+    passes: u8,
+    saturation: f32,
+) -> Option<egui::ColorImage> {
     use windows::Win32::Graphics::Gdi::{
         CreateCompatibleDC, CreateDIBSection, DeleteDC, DeleteObject, GetDC, ReleaseDC,
         SelectObject, SetStretchBltMode, StretchBlt, BITMAPINFO, BITMAPINFOHEADER, BI_RGB,
         DIB_RGB_COLORS, HALFTONE, SRCCOPY,
     };
 
-    if w <= 0 || h <= 0 {
+    if w <= 0 || h <= 0 || w > 4096 || h > 2160 {
         return None;
     }
 
@@ -52,14 +58,14 @@ pub fn capture(x: i32, y: i32, w: i32, h: i32) -> Option<egui::ColorImage> {
 
         let mut bita: *mut core::ffi::c_void = std::ptr::null_mut();
         let Ok(dib) = CreateDIBSection(mem, &info, DIB_RGB_COLORS, &mut bita, None, 0) else {
-            DeleteDC(mem);
+            let _ = DeleteDC(mem);
             ReleaseDC(None, layar);
             return None;
         };
 
         if bita.is_null() {
-            DeleteObject(dib);
-            DeleteDC(mem);
+            let _ = DeleteObject(dib);
+            let _ = DeleteDC(mem);
             ReleaseDC(None, layar);
             return None;
         }
@@ -82,15 +88,22 @@ pub fn capture(x: i32, y: i32, w: i32, h: i32) -> Option<egui::ColorImage> {
         }
 
         SelectObject(mem, lama);
-        DeleteObject(dib);
-        DeleteDC(mem);
+        let _ = DeleteObject(dib);
+        let _ = DeleteDC(mem);
         ReleaseDC(None, layar);
 
         if !ok {
             return None;
         }
 
-        box_blur(&mut rgba, dw as usize, dh as usize, 2);
+        inpaint_pill_strip(&mut rgba, dw as usize, dh as usize);
+        box_blur(
+            &mut rgba,
+            dw as usize,
+            dh as usize,
+            passes.clamp(1, 5) as usize,
+        );
+        apply_saturation(&mut rgba, saturation);
 
         Some(egui::ColorImage::from_rgba_unmultiplied(
             [dw as usize, dh as usize],
@@ -100,12 +113,60 @@ pub fn capture(x: i32, y: i32, w: i32, h: i32) -> Option<egui::ColorImage> {
 }
 
 #[cfg(not(windows))]
-pub fn capture(_x: i32, _y: i32, _w: i32, _h: i32) -> Option<egui::ColorImage> {
+pub fn capture(
+    _x: i32,
+    _y: i32,
+    _w: i32,
+    _h: i32,
+    _passes: u8,
+    _saturation: f32,
+) -> Option<egui::ColorImage> {
     None
 }
 
-/// Kotak blur dua lintasan (setara blur Gaussian kasar).
-fn box_blur(data: &mut [u8], w: usize, h: usize, lintasan: usize) {
+/// Menggantikan area jejak pill di bagian tengah atas dengan sampel piksel dari
+/// baris di bawahnya sebelum proses blur, mencegah timbulnya artefak noda gelap.
+pub(crate) fn inpaint_pill_strip(rgba: &mut [u8], w: usize, h: usize) {
+    if w == 0 || h == 0 || rgba.len() < w * h * 4 {
+        return;
+    }
+    let cut_h = (h / 4).max(1);
+    let sample_y = cut_h.min(h.saturating_sub(1));
+
+    let span = ((w as f32) * 0.55).round() as usize;
+    let start_x = (w.saturating_sub(span)) / 2;
+    let end_x = (start_x + span).min(w);
+
+    for y in 0..cut_h {
+        for x in start_x..end_x {
+            let target = (y * w + x) * 4;
+            let sample = (sample_y * w + x) * 4;
+            rgba[target] = rgba[sample];
+            rgba[target + 1] = rgba[sample + 1];
+            rgba[target + 2] = rgba[sample + 2];
+            rgba[target + 3] = rgba[sample + 3];
+        }
+    }
+}
+
+/// Menyesuaikan saturasi warna RGB terhadap luminans standar BT.709.
+pub(crate) fn apply_saturation(rgba: &mut [u8], saturation: f32) {
+    if (saturation - 1.0).abs() < 0.01 || !saturation.is_finite() {
+        return;
+    }
+    for px in rgba.chunks_exact_mut(4) {
+        let r = px[0] as f32;
+        let g = px[1] as f32;
+        let b = px[2] as f32;
+        let lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        px[0] = (lum + saturation * (r - lum)).round().clamp(0.0, 255.0) as u8;
+        px[1] = (lum + saturation * (g - lum)).round().clamp(0.0, 255.0) as u8;
+        px[2] = (lum + saturation * (b - lum)).round().clamp(0.0, 255.0) as u8;
+    }
+}
+
+/// Kotak blur multi-lintasan (setara blur Gaussian halus).
+pub(crate) fn box_blur(data: &mut [u8], w: usize, h: usize, lintasan: usize) {
     if w == 0 || h == 0 {
         return;
     }
@@ -159,5 +220,67 @@ fn box_blur(data: &mut [u8], w: usize, h: usize, lintasan: usize) {
             }
         }
         data.copy_from_slice(&sementara);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_inpaint_pill_strip() {
+        let w = 10;
+        let h = 8;
+        let mut data = vec![0u8; w * h * 4];
+        let cut_h = (h / 4).max(1);
+        for x in 0..w {
+            let idx = (cut_h * w + x) * 4;
+            data[idx] = 100;
+            data[idx + 1] = 150;
+            data[idx + 2] = 200;
+            data[idx + 3] = 255;
+        }
+
+        inpaint_pill_strip(&mut data, w, h);
+
+        let target_idx = (0 * w + 4) * 4;
+        assert_eq!(data[target_idx], 100);
+        assert_eq!(data[target_idx + 1], 150);
+        assert_eq!(data[target_idx + 2], 200);
+
+        let outer_idx = (0 * w + 0) * 4;
+        assert_eq!(data[outer_idx], 0);
+    }
+
+    #[test]
+    fn test_box_blur_smooths_data() {
+        let w = 4;
+        let h = 4;
+        let mut data = vec![0u8; w * h * 4];
+        let center = (1 * w + 1) * 4;
+        data[center] = 255;
+        data[center + 1] = 255;
+        data[center + 2] = 255;
+        data[center + 3] = 255;
+
+        box_blur(&mut data, w, h, 1);
+
+        assert!(data[center] < 255);
+        assert!(data[center] > 0);
+        let adj = (1 * w + 2) * 4;
+        assert!(data[adj] > 0);
+    }
+
+    #[test]
+    fn test_apply_saturation() {
+        let mut data = vec![255, 0, 0, 255];
+        apply_saturation(&mut data, 0.0);
+        assert_eq!(data[0], data[1]);
+        assert_eq!(data[1], data[2]);
+        assert!((data[0] as i32 - 54).abs() <= 1);
+
+        let mut data2 = vec![120, 80, 40, 255];
+        apply_saturation(&mut data2, 1.0);
+        assert_eq!(data2, vec![120, 80, 40, 255]);
     }
 }

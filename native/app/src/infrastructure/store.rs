@@ -67,6 +67,7 @@ pub(crate) fn wipe_in(dir: &std::path::Path) {
         "pomodoro.json",
         "notes.json",
         "settings-export.json",
+        "theme-preset.json",
         "secret.bin",
     ] {
         let _ = std::fs::remove_file(dir.join(nama));
@@ -98,6 +99,7 @@ mod tests {
             "pomodoro.json",
             "notes.json",
             "settings-export.json",
+            "theme-preset.json",
             "secret.bin",
         ] {
             std::fs::write(tmp.join(nama), b"{}").unwrap();
@@ -113,6 +115,7 @@ mod tests {
             "pomodoro.json",
             "notes.json",
             "settings-export.json",
+            "theme-preset.json",
             "secret.bin",
         ] {
             assert!(!tmp.join(nama).exists(), "{nama} harus terhapus");

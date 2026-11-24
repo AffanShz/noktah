@@ -323,8 +323,59 @@ impl Noktah {
         });
     }
 
-    /// Tab 2: Appearance — accent color, glass effect, opacity
-    fn draw_appearance_tab(&mut self, ui: &mut egui::Ui, lang: noktah_core::settings::Lang, theme: Theme) {
+    /// Tab 2: Appearance — presets, accent color, glass effect, opacity
+    pub(crate) fn draw_appearance_tab(&mut self, ui: &mut egui::Ui, lang: noktah_core::settings::Lang, theme: Theme) {
+        widgets::section(ui, i18n::t(lang, "settings.presets"), &theme);
+        widgets::card_group(ui, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                for preset in noktah_core::ThemePreset::built_in_presets() {
+                    let dipilih = self.settings.theme_preset == preset.id_slug();
+                    if widgets::chip_button(ui, &preset.name, dipilih, &theme) {
+                        preset.apply_to(&mut self.settings);
+                        self.touch_settings();
+                    }
+                }
+            });
+            widgets::card_divider(ui);
+            ui.horizontal(|ui| {
+                if widgets::chip_button(ui, i18n::t(lang, "settings.preset_export"), false, &theme) {
+                    let preset = noktah_core::ThemePreset::from_settings("Custom", &self.settings);
+                    if let Ok(json) = preset.to_json_pretty() {
+                        crate::infrastructure::store::save("theme-preset.json", &preset);
+                        ui.output_mut(|o| o.copied_text = json);
+                        self.banner = Some((
+                            i18n::t(lang, "settings.preset_exported").to_string(),
+                            std::time::Instant::now(),
+                        ));
+                    }
+                }
+                if widgets::chip_button(ui, i18n::t(lang, "settings.preset_import"), false, &theme) {
+                    let maybe_preset = crate::infrastructure::os::read_clipboard_text()
+                        .and_then(|text| noktah_core::ThemePreset::from_json_str(&text).ok())
+                        .or_else(|| {
+                            let path = crate::infrastructure::store::data_dir().join("theme-preset.json");
+                            std::fs::read_to_string(&path)
+                                .ok()
+                                .and_then(|text| noktah_core::ThemePreset::from_json_str(&text).ok())
+                        });
+
+                    if let Some(preset) = maybe_preset {
+                        preset.apply_to(&mut self.settings);
+                        self.touch_settings();
+                        self.banner = Some((
+                            i18n::t(lang, "settings.preset_imported").to_string(),
+                            std::time::Instant::now(),
+                        ));
+                    } else {
+                        self.banner = Some((
+                            i18n::t(lang, "settings.preset_import_err").to_string(),
+                            std::time::Instant::now(),
+                        ));
+                    }
+                }
+            });
+        });
+
         widgets::section(ui, "Theme & Accent", &theme);
         widgets::card_group(ui, |ui| {
             widgets::row_desc(
@@ -334,10 +385,45 @@ impl Noktah {
                 &theme,
                 |ui| {
                     for accent in noktah_core::Accent::ALL {
-                        let dipilih = self.settings.accent == accent;
+                        let dipilih = self.settings.accent == accent && self.settings.custom_accent_hex.is_none();
                         let [r, g, b] = accent.rgb();
                         if widgets::swatch(ui, Color32::from_rgb(r, g, b), dipilih, &theme) {
                             self.settings.accent = accent;
+                            self.settings.custom_accent_hex = None;
+                            self.settings.theme_preset = "custom".into();
+                            self.touch_settings();
+                        }
+                    }
+                },
+            );
+            widgets::card_divider(ui);
+            widgets::row_desc(
+                ui,
+                i18n::t(lang, "settings.custom_accent"),
+                "Format #RRGGBB (contoh: #3B82F6)",
+                &theme,
+                |ui| {
+                    let mut hex_buf = self.settings.custom_accent_hex.clone().unwrap_or_default();
+                    let resp = ui.add(
+                        egui::TextEdit::singleline(&mut hex_buf)
+                            .hint_text("#RRGGBB")
+                            .desired_width(85.0),
+                    );
+                    if resp.changed() {
+                        if hex_buf.trim().is_empty() {
+                            self.settings.custom_accent_hex = None;
+                            self.settings.theme_preset = "custom".into();
+                            self.touch_settings();
+                        } else if let Some(rgb) = noktah_core::theme_preset::parse_hex_rgb(&hex_buf) {
+                            self.settings.custom_accent_hex = Some(noktah_core::theme_preset::format_hex_rgb(rgb));
+                            self.settings.theme_preset = "custom".into();
+                            self.touch_settings();
+                        }
+                    }
+                    if self.settings.custom_accent_hex.is_some() {
+                        if widgets::chip_button(ui, "Reset", false, &theme) {
+                            self.settings.custom_accent_hex = None;
+                            self.settings.theme_preset = "custom".into();
                             self.touch_settings();
                         }
                     }
@@ -371,6 +457,28 @@ impl Noktah {
                         )
                         .changed()
                     {
+                        self.settings.theme_preset = "custom".into();
+                        self.touch_settings();
+                    }
+                },
+            );
+            widgets::card_divider(ui);
+            widgets::row_desc(
+                ui,
+                i18n::t(lang, "settings.glass_specular"),
+                &format!("{:.0}%", self.settings.glass_specular * 100.0),
+                &theme,
+                |ui| {
+                    ui.spacing_mut().slider_width = 150.0;
+                    if ui
+                        .add(
+                            egui::Slider::new(&mut self.settings.glass_specular, 0.0..=1.0)
+                                .show_value(false)
+                                .trailing_fill(true),
+                        )
+                        .changed()
+                    {
+                        self.settings.theme_preset = "custom".into();
                         self.touch_settings();
                     }
                 },
@@ -390,10 +498,55 @@ impl Noktah {
                     let dipilih = self.settings.glass_effect == efek;
                     if widgets::chip_button(ui, efek.label(), dipilih, &theme) {
                         self.settings.glass_effect = efek;
+                        self.settings.theme_preset = "custom".into();
                         self.touch_settings();
                     }
                 }
             });
+            if self.settings.glass_effect.uses_blur() {
+                widgets::card_divider(ui);
+                widgets::row_desc(
+                    ui,
+                    i18n::t(lang, "settings.glass_blur"),
+                    &format!("{} px", self.settings.glass_blur_radius),
+                    &theme,
+                    |ui| {
+                        ui.spacing_mut().slider_width = 150.0;
+                        if ui
+                            .add(
+                                egui::Slider::new(&mut self.settings.glass_blur_radius, 1..=5)
+                                    .show_value(false)
+                                    .trailing_fill(true),
+                            )
+                            .changed()
+                        {
+                            self.settings.theme_preset = "custom".into();
+                            self.touch_settings();
+                        }
+                    },
+                );
+                widgets::card_divider(ui);
+                widgets::row_desc(
+                    ui,
+                    i18n::t(lang, "settings.glass_saturation"),
+                    &format!("{:.2}x", self.settings.glass_saturation),
+                    &theme,
+                    |ui| {
+                        ui.spacing_mut().slider_width = 150.0;
+                        if ui
+                            .add(
+                                egui::Slider::new(&mut self.settings.glass_saturation, 0.8..=2.0)
+                                    .show_value(false)
+                                    .trailing_fill(true),
+                            )
+                            .changed()
+                        {
+                            self.settings.theme_preset = "custom".into();
+                            self.touch_settings();
+                        }
+                    },
+                );
+            }
         });
     }
 

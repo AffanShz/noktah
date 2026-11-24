@@ -361,12 +361,13 @@ impl Noktah {
                     }
                 }
 
+                let has_blur = self.settings.glass_effect.uses_blur() && self.glass_tex.is_some();
                 glass::surface_n(
                     painter,
                     outer_rect,
                     radius,
                     &self.theme,
-                    self.settings.glass_effect.uses_blur(),
+                    has_blur,
                     n_sudut,
                 );
 

@@ -210,8 +210,20 @@ impl Provider {
     }
 }
 
-fn default_true() -> bool {
+pub(crate) fn default_true() -> bool {
     true
+}
+
+fn default_theme_preset() -> String {
+    "obsidian".to_string()
+}
+
+fn default_glass_blur_radius() -> u8 {
+    3
+}
+
+fn default_glass_saturation() -> f32 {
+    1.35
 }
 
 /// Bawaan jeda hover: 240 ms, cukup membedakan "lewat sambil menunjuk" dari
@@ -347,6 +359,18 @@ pub struct Settings {
     #[serde(default = "default_hover_delay")]
     pub hover_delay_ms: u32,
     pub glass_effect: GlassEffect,
+    #[serde(default = "default_theme_preset")]
+    pub theme_preset: String,
+    #[serde(default)]
+    pub custom_accent_hex: Option<String>,
+    #[serde(default)]
+    pub glass_tint_rgb: [u8; 3],
+    #[serde(default)]
+    pub glass_specular: f32,
+    #[serde(default = "default_glass_blur_radius")]
+    pub glass_blur_radius: u8,
+    #[serde(default = "default_glass_saturation")]
+    pub glass_saturation: f32,
     // Baris minimized: item mana yang tampil.
     pub mini_art: bool,
     pub mini_title: bool,
@@ -475,6 +499,12 @@ impl Default for Settings {
             file_shelf_enabled: true,
             audio_hud_enabled: true,
             custom_tiles_enabled: true,
+            theme_preset: "obsidian".into(),
+            custom_accent_hex: None,
+            glass_tint_rgb: [0, 0, 0],
+            glass_specular: 0.0,
+            glass_blur_radius: 3,
+            glass_saturation: 1.35,
         }
     }
 }
@@ -643,6 +673,27 @@ impl Settings {
         }
         if self.city.trim().is_empty() {
             self.city = "Jakarta".into();
+        }
+        self.glass_specular = if self.glass_specular.is_finite() {
+            self.glass_specular.clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        self.glass_blur_radius = self.glass_blur_radius.clamp(1, 5);
+        self.glass_saturation = if self.glass_saturation.is_finite() {
+            self.glass_saturation.clamp(0.8, 2.0)
+        } else {
+            1.35
+        };
+        if let Some(raw) = &self.custom_accent_hex {
+            if let Some(rgb) = crate::theme_preset::parse_hex_rgb(raw) {
+                self.custom_accent_hex = Some(crate::theme_preset::format_hex_rgb(rgb));
+            } else {
+                self.custom_accent_hex = None;
+            }
+        }
+        if self.theme_preset.trim().is_empty() {
+            self.theme_preset = "obsidian".into();
         }
     }
 }

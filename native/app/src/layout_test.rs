@@ -1631,4 +1631,97 @@ mod tests {
             }
         });
     }
+
+    #[test]
+    fn test_built_in_theme_presets_application_and_theme_resolution() {
+        use crate::presentation::theme::{luminance, on_color, Theme};
+        use noktah_core::{Settings, ThemePreset};
+
+        let presets = ThemePreset::built_in_presets();
+        assert_eq!(presets.len(), 5);
+
+        for preset in presets {
+            let mut settings = Settings::default();
+            preset.apply_to(&mut settings);
+
+            assert_eq!(settings.theme_preset, preset.id_slug());
+            assert_eq!(settings.opacity, preset.opacity);
+            assert_eq!(settings.glass_specular, preset.glass_specular);
+            assert_eq!(settings.glass_blur_radius, preset.glass_blur_radius);
+            assert_eq!(settings.glass_saturation, preset.glass_saturation);
+            assert_eq!(settings.glass_tint_rgb, preset.glass_tint_rgb);
+            assert_eq!(settings.ears, preset.ears);
+
+            let theme = Theme::from_settings(&settings);
+
+            // Contrast invariance: accent must be legible
+            let lum = luminance(theme.accent);
+            assert!(
+                lum >= 0.25,
+                "Aksen preset '{}' terlalu gelap (lum={})",
+                preset.name,
+                lum
+            );
+            assert_eq!(theme.on_accent, on_color(theme.accent));
+
+            if preset.glass_specular > 0.01 {
+                assert!(theme.edge.a() > 0);
+                assert!(theme.edge_bright.a() > 0);
+            } else {
+                assert_eq!(theme.edge, egui::Color32::TRANSPARENT);
+                assert_eq!(theme.edge_bright, egui::Color32::TRANSPARENT);
+            }
+
+            let expected_alpha = (preset.opacity * 255.0) as u8;
+            assert_eq!(theme.panel.a(), expected_alpha);
+        }
+    }
+
+    #[test]
+    fn test_custom_hex_accent_resolution() {
+        use crate::presentation::theme::Theme;
+        use noktah_core::{Accent, Settings};
+
+        let mut settings = Settings::default();
+        settings.accent = Accent::Teal;
+        settings.custom_accent_hex = Some("#3B82F6".into());
+
+        let theme = Theme::from_settings(&settings);
+        // Custom accent #3B82F6 is [59, 130, 246], legible_accent adjusts it slightly for contrast
+        assert!((theme.accent.b() as i32 - 246).abs() <= 2);
+
+        // Invalid hex falls back to settings.accent
+        settings.custom_accent_hex = Some("invalid-hex".into());
+        let theme_fallback = Theme::from_settings(&settings);
+        let [tr, tg, tb] = Accent::Teal.rgb();
+        assert_eq!(theme_fallback.accent.r(), tr);
+        assert_eq!(theme_fallback.accent.g(), tg);
+        assert_eq!(theme_fallback.accent.b(), tb);
+    }
+
+    #[test]
+    fn test_appearance_tab_ui_and_settings_backward_compat() {
+        use crate::app::Noktah;
+        use crate::presentation::theme::Theme;
+        use noktah_core::Settings;
+
+        // Legacy empty settings deserialization
+        let legacy_settings: Settings = serde_json::from_str("{}").expect("deserialization of empty json");
+        assert_eq!(legacy_settings.theme_preset, "obsidian");
+        assert_eq!(legacy_settings.glass_blur_radius, 3);
+        assert_eq!(legacy_settings.glass_saturation, 1.35);
+        assert_eq!(legacy_settings.glass_specular, 0.0);
+        assert_eq!(legacy_settings.custom_accent_hex, None);
+
+        let theme = Theme::from_settings(&legacy_settings);
+        assert_eq!(theme.edge, egui::Color32::TRANSPARENT);
+
+        egui::__run_test_ui(|ui| {
+            let ctx = ui.ctx().clone();
+            let hover = crate::infrastructure::platform::Hover::new(false);
+            let mut app = Noktah::new("test".to_string(), hover, &ctx);
+
+            app.draw_appearance_tab(ui, noktah_core::Lang::Id, theme);
+        });
+    }
 }

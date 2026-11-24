@@ -251,6 +251,17 @@ pub const STRINGS: &[(&str, &str, &str)] = &[
     ("settings.file_shelf_desc", "Tampung berkas sementara saat di-drag ke area notch", "Hold temporary files when dragged onto the notch"),
     ("settings.audio_hud", "HUD Perangkat Audio", "Audio Device HUD"),
     ("settings.audio_hud_desc", "Tampilkan notifikasi mikro saat perangkat audio beralih", "Show micro notification when audio device changes"),
+    ("settings.presets", "Tema Preset", "Theme Presets"),
+    ("settings.presets_desc", "Preset tampilan siap pakai", "Curated appearance presets"),
+    ("settings.custom_accent", "Aksen Kustom (HEX)", "Custom Accent (HEX)"),
+    ("settings.glass_specular", "Kilau Tepi (Specular)", "Edge Specular Rim"),
+    ("settings.glass_blur", "Radius Blur Kaca", "Glass Blur Radius"),
+    ("settings.glass_saturation", "Saturasi Latar Kaca", "Glass Saturation Boost"),
+    ("settings.preset_export", "Ekspor Preset", "Export Preset"),
+    ("settings.preset_import", "Impor Preset", "Import Preset"),
+    ("settings.preset_exported", "Preset tema berhasil diekspor & disalin!", "Theme preset exported & copied to clipboard!"),
+    ("settings.preset_imported", "Preset tema berhasil diterapkan!", "Theme preset applied successfully!"),
+    ("settings.preset_import_err", "Gagal membaca preset: format JSON tidak valid", "Failed to import preset: invalid JSON format"),
     ("notch.hint", "Arahkan kursor untuk membuka", "Hover to open"),
 ];
 
