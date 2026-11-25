@@ -3,6 +3,17 @@
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/),
 versi mengikuti [SemVer](https://semver.org/lang/id/).
 
+## [1.6.0] - 2026-11-25
+
+### Ditambahkan
+- **Skema `ThemePreset` & 5 Preset Kurasi (`noktah-core::theme_preset`)** — Dukungan penuh 5 preset kurasi bawaan (*Obsidian*, *Liquid Glass*, *Midnight Frost*, *Aurora*, *Emerald Slate*), kustomisasi warna aksen `#RRGGBB` beserta pemeriksaan kontras WCAG (`legible_accent` + `on_color`), serta sanitasi batas parameter visual (`glass_specular`, `glass_blur_radius`, `glass_saturation`).
+- **Impor & Ekspor Preset JSON** — Ekspor konfigurasi tampilan ke clipboard sistem dan `theme-preset.json` serta impor satu-klik dari clipboard atau berkas lokal dengan batas ukuran aman 32 KB (berkas preset ikut dibersihkan oleh `store::wipe_in()`).
+- **UI Pengaturan Tampilan Lengkap** — Chip pemilihan preset kurasi, input teks warna aksen HEX kustom + tombol reset, tombol Ekspor/Impor preset, dan slider *Specular Rim*, *Blur Radius*, serta *Saturation* pada tab *Appearance*.
+- **Unit & Layout Test Baru** — Penambahan 11 test baru (`107 noktah-core` + `5 noktah-hook` + `108 noktah-native`, total 220 test lulus).
+
+### Diperbaiki
+- **Stabilitas Backdrop & Specular Liquid Glass (`blur.rs`, `glass.rs`, `frame.rs`)** — Penambalan strip pill (`inpaint_pill_strip`) di 55% tengah atas sebelum box-blur agar ekspansi dari pill tidak meninggalkan bayangan gelap self-capture, penyesuaian saturasi BT.709, rentang alpha dinamis `125..=220` saat blur aktif, gradien tint kaca 3-titik, garis specular rim 1 px + bottom refraction highlight, dan flag `glass_dirty` agar capture ulang selalu sinkron setelah perubahan tema.
+
 ## [1.5.0] - 2026-11-25
 
 ### Ditambahkan

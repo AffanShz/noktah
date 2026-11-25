@@ -6,8 +6,9 @@ Legenda usaha: 🟢 beberapa jam · 🟡 beberapa hari · 🔴 butuh interop Win
 
 ---
 
-## Sudah selesai (`v1.0.0` – `v1.5.0`)
+## Sudah selesai (`v1.0.0` – `v1.6.0`)
 
+- **Liquid Glass GPU Shader Stabil & Preset Tema (`v1.6.0`)** — stabilisasi efek backdrop Liquid Glass (inpainting strip pill agar bebas noda hitam, saturasi BT.709, alpha dinamis, gradien tint, rim highlight specular, sinkronisasi `glass_dirty`) serta `ThemePreset` dengan 5 preset kurasi, kustomisasi aksen `#RRGGBB`, dan impor/ekspor JSON clipboard + berkas (`theme-preset.json`).
 - **Custom Status Tiles via `noktah-hook` (`v1.5.0`)** — skema IPC `CustomTile`/`TileStore` (maks 6 tile, TTL otomatis di `next_wake`, 5 nada status), perintah CLI `noktah-hook tile` / `tile-remove` / `tile-clear`, penyematan di pill minimal (`--pin-mini`), dan switcher kartu di halaman `System`.
 - **Aplikasi Rust native (`egui`/`eframe`)** — tanpa WebView/runtime tambahan, terbagi menjadi `noktah-core`, `noktah-native`, dan `noktah-hook`.
 - **Dynamic Island & Morphing** — kurva spring terkalibrasi ([MOTION.md](MOTION.md)), squircle, liquid ears, pill minimized elastis yang dapat dikustomisasi (termasuk `mini_idle_on_pause` saat audio dijeda), serta hover intent.
@@ -18,12 +19,11 @@ Legenda usaha: 🟢 beberapa jam · 🟡 beberapa hari · 🔴 butuh interop Win
 
 ---
 
-## Selanjutnya (`v1.6.0` – `v2.0.0`)
+## Selanjutnya (`v2.0.0`)
 
-*Fokus: distribusi publik tanpa friksi dan penyempurnaan visual kaca.*
+*Fokus: distribusi publik tanpa friksi.*
 
 - **Code Signing & `winget`** — penandatanganan digital biner rilis di CI untuk menghindari peringatan SmartScreen serta paket `winget` dengan registrasi `PATH` otomatis bagi `noktah-hook.exe`.
-- **Liquid Glass GPU Shader Stabil & Preset Tema** — penyempurnaan mode kaca penuh dan impor/ekspor preset tampilan.
 
 ---
 
