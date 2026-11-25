@@ -118,6 +118,7 @@ pub struct Noktah {
     /// keluhan #1 pengguna aplikasi notch adalah expand tidak sengaja.
     pub(crate) hover_since: Option<Instant>,
     pub(crate) glass_tex: Option<egui::TextureHandle>,
+    pub(crate) glass_dirty: bool,
     /// Kapan pengguna terakhir menggeser atau memilih lirik.
     pub lyric_manual_at: Instant,
     pub album_accent: Option<egui::Color32>,
@@ -366,7 +367,7 @@ impl Noktah {
         let force_anim = settings.force_animation;
         let settings_minimal = settings.minimal_notch;
         settings.sanitize();
-        let theme = Theme::new(settings.accent, settings.opacity);
+        let theme = Theme::from_settings(&settings);
         let lang = settings.language;
         let start_open = settings.start_expanded;
         let todos: Vec<Todo> = store::load("tasks.json");
@@ -447,6 +448,7 @@ impl Noktah {
             peek_until: None,
             hover_since: None,
             glass_tex: None,
+            glass_dirty: false,
             lyric_manual_at: Instant::now() - std::time::Duration::from_secs(10),
             album_accent: None,
             scrubber_expand: Spring::with(0.0, 280.0, 22.0),

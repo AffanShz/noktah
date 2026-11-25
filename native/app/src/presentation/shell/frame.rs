@@ -572,7 +572,7 @@ impl eframe::App for Noktah {
         self.hover.animating.store(animating, Ordering::Relaxed);
 
         // Perbarui tema aktif (opsi aksen dinamis dari album art ala Mochy-Music)
-        let base_theme = Theme::new(self.settings.accent, self.settings.opacity);
+        let base_theme = Theme::from_settings(&self.settings);
         let use_album_accent = if self.open.pos < 0.35 {
             self.show_media_in_mini()
         } else {
@@ -666,16 +666,28 @@ impl eframe::App for Noktah {
             self.banner = None;
         }
 
-        // Mode Penuh: tangkap layar sekali saat panel mulai membuka, selagi
-        // jendela masih berupa pill kecil sehingga yang tertangkap hampir
-        // seluruhnya isi layar.
-        if self.settings.glass_effect.uses_blur() && self.open.target > 0.5 && self.open.pos < 0.1 {
+        // Mode Kaca: tangkap layar dan kaburkan untuk latar panel notch
+        if !self.settings.glass_effect.uses_blur() {
+            self.glass_tex = None;
+            self.glass_dirty = false;
+        } else if (self.open.target > 0.5 && self.open.pos < 0.1)
+            || self.glass_dirty
+            || (self.open.pos > 0.2 && self.glass_tex.is_none())
+        {
             if let Some((x, y, w, h)) = crate::infrastructure::platform::window_rect() {
-                if let Some(gambar) = crate::infrastructure::blur::capture(x, y, w, h) {
+                if let Some(gambar) = crate::infrastructure::blur::capture(
+                    x,
+                    y,
+                    w,
+                    h,
+                    self.settings.glass_blur_radius,
+                    self.settings.glass_saturation,
+                ) {
                     self.glass_tex =
                         Some(ctx.load_texture("glass-bg", gambar, egui::TextureOptions::LINEAR));
                 }
             }
+            self.glass_dirty = false;
         }
 
         // --- gambar -----------------------------------------------------

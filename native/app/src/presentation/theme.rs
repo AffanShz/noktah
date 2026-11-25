@@ -176,6 +176,7 @@ pub struct Theme {
 }
 
 impl Theme {
+    #[allow(dead_code)]
     pub fn new(accent: Accent, opacity: f32) -> Self {
         let [r, g, b] = accent.rgb();
         let alpha = (opacity.clamp(0.5, 1.0) * 255.0) as u8;
@@ -211,6 +212,80 @@ impl Theme {
             rim,
             edge: Color32::TRANSPARENT,
             edge_bright: Color32::TRANSPARENT,
+        }
+    }
+
+    /// Menghasilkan tema lengkap berdasarkan konfigurasi `Settings`.
+    pub fn from_settings(s: &noktah_core::Settings) -> Self {
+        let [r, g, b] = s
+            .custom_accent_hex
+            .as_deref()
+            .and_then(noktah_core::theme_preset::parse_hex_rgb)
+            .unwrap_or_else(|| s.accent.rgb());
+        let alpha = (s.opacity.clamp(0.5, 1.0) * 255.0) as u8;
+        let aksen = legible_accent(Color32::from_rgb(r, g, b));
+
+        let rim = Color32::from_rgb(
+            (aksen.r() as f32 * 0.85 + 50.0).min(255.0) as u8,
+            (aksen.g() as f32 * 0.90 + 70.0).min(255.0) as u8,
+            (aksen.b() as f32 * 0.95 + 90.0).min(255.0) as u8,
+        );
+
+        let (glass_top, glass_mid, glass_bot) = if s.glass_effect.uses_blur() && s.glass_tint_rgb != [0, 0, 0] {
+            let [tr, tg, tb] = s.glass_tint_rgb;
+            let top = Color32::from_rgb(tr, tg, tb);
+            let mid = Color32::from_rgb(
+                (tr as f32 * 0.85).round() as u8,
+                (tg as f32 * 0.85).round() as u8,
+                (tb as f32 * 0.85).round() as u8,
+            );
+            let bot = Color32::from_rgb(
+                (tr as f32 * 1.15).min(255.0).round() as u8,
+                (tg as f32 * 1.15).min(255.0).round() as u8,
+                (tb as f32 * 1.25).min(255.0).round() as u8,
+            );
+            (top, mid, bot)
+        } else if s.glass_tint_rgb != [0, 0, 0] {
+            let [tr, tg, tb] = s.glass_tint_rgb;
+            let c = Color32::from_rgb(tr, tg, tb);
+            (c, c, c)
+        } else {
+            (
+                Color32::from_rgb(0, 0, 0),
+                Color32::from_rgb(0, 0, 0),
+                Color32::from_rgb(0, 0, 0),
+            )
+        };
+
+        let edge = if s.glass_specular > 0.01 {
+            Color32::from_rgba_unmultiplied(255, 255, 255, (s.glass_specular * 95.0).round() as u8)
+        } else {
+            Color32::TRANSPARENT
+        };
+
+        let edge_bright = if s.glass_specular > 0.01 {
+            Color32::from_rgba_unmultiplied(255, 255, 255, (s.glass_specular * 145.0).round() as u8)
+        } else {
+            Color32::TRANSPARENT
+        };
+
+        Self {
+            accent: aksen,
+            accent_soft: Color32::from_rgba_unmultiplied(aksen.r(), aksen.g(), aksen.b(), 61),
+            on_accent: on_color(aksen),
+            ink: Color32::from_rgba_unmultiplied(255, 255, 255, 240),
+            dim: Color32::from_rgba_unmultiplied(235, 235, 245, 158),
+            faint: Color32::from_rgba_unmultiplied(235, 235, 245, 82),
+            stroke: Color32::from_rgba_unmultiplied(255, 255, 255, 26),
+            surface: Color32::from_rgba_unmultiplied(255, 255, 255, 20),
+            fill2: Color32::from_rgba_unmultiplied(255, 255, 255, 36),
+            panel: Color32::from_rgba_unmultiplied(0, 0, 0, alpha),
+            glass_top,
+            glass_mid,
+            glass_bot,
+            rim,
+            edge,
+            edge_bright,
         }
     }
 

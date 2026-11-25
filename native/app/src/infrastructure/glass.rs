@@ -145,7 +145,13 @@ pub fn surface_n(
     tembus: bool,
     n: f32,
 ) {
-    let alpha = if tembus { 246 } else { 255 };
+    let alpha = if tembus {
+        (125.0 + (theme.panel.a() as f32 / 255.0) * 95.0).round().clamp(125.0, 220.0) as u8
+    } else if theme.edge.a() > 0 {
+        theme.panel.a().max(215)
+    } else {
+        255
+    };
     let fill = Color32::from_rgba_unmultiplied(
         theme.glass_top.r(),
         theme.glass_top.g(),
@@ -156,6 +162,12 @@ pub fn surface_n(
     let r = radius.min(rect.height()).min(rect.width() * 0.5);
     if r <= 0.5 {
         painter.rect_filled(rect, 0.0, fill);
+        if theme.edge.a() > 0 {
+            painter.line_segment(
+                [rect.left_bottom(), rect.right_bottom()],
+                egui::Stroke::new(1.0, theme.edge),
+            );
+        }
         return;
     }
 
@@ -202,7 +214,55 @@ pub fn surface_n(
     pts.push(egui::pos2(rect.left(), cy_l));
 
     // Gambar poligon konveks mulus dengan antialiasing subpixel bawaan egui, tanpa outline (Stroke::NONE)
-    painter.add(egui::Shape::convex_polygon(pts, fill, egui::Stroke::NONE));
+    painter.add(egui::Shape::convex_polygon(pts.clone(), fill, egui::Stroke::NONE));
+
+    if theme.glass_top != theme.glass_bot {
+        let stops = [
+            (
+                0.0,
+                Color32::from_rgba_unmultiplied(
+                    theme.glass_top.r(),
+                    theme.glass_top.g(),
+                    theme.glass_top.b(),
+                    alpha,
+                ),
+            ),
+            (
+                0.5,
+                Color32::from_rgba_unmultiplied(
+                    theme.glass_mid.r(),
+                    theme.glass_mid.g(),
+                    theme.glass_mid.b(),
+                    alpha,
+                ),
+            ),
+            (
+                1.0,
+                Color32::from_rgba_unmultiplied(
+                    theme.glass_bot.r(),
+                    theme.glass_bot.g(),
+                    theme.glass_bot.b(),
+                    alpha,
+                ),
+            ),
+        ];
+        gradient_n(painter, rect, 0.0, r, &stops, n);
+    }
+
+    if theme.edge.a() > 0 && pts.len() > 1 {
+        let mut rim_pts = pts[1..].to_vec();
+        rim_pts.push(pts[0]);
+        painter.add(egui::Shape::line(rim_pts, egui::Stroke::new(1.0, theme.edge)));
+    }
+
+    if theme.edge_bright.a() > 0 {
+        let bot_y = rect.bottom() - 0.5;
+        let hl_left = egui::pos2(rect.left() + r, bot_y);
+        let hl_right = egui::pos2(rect.right() - r, bot_y);
+        if hl_right.x > hl_left.x {
+            painter.line_segment([hl_left, hl_right], egui::Stroke::new(1.0, theme.edge_bright));
+        }
+    }
 }
 
 /// Telinga cair: potongan sudut yang menyambung panel ke tepi layar.
@@ -250,11 +310,16 @@ pub fn ear(painter: &Painter, anchor: Pos2, size: f32, flip: bool, color: Color3
 
 /// Telinga kiri dan kanan sekaligus, mengapit panel.
 pub fn ears(painter: &Painter, rect: Rect, size: f32, theme: &Theme) {
+    let alpha = if theme.edge.a() > 0 {
+        theme.panel.a().max(180)
+    } else {
+        255
+    };
     let warna = Color32::from_rgba_unmultiplied(
         theme.glass_top.r(),
         theme.glass_top.g(),
         theme.glass_top.b(),
-        255,
+        alpha,
     );
 
     ear(

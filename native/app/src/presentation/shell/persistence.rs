@@ -15,7 +15,8 @@ impl Noktah {
     /// menggeser slider tidak menulis file ratusan kali.
     pub fn touch_settings(&mut self) {
         self.lang = self.settings.language;
-        self.theme = Theme::new(self.settings.accent, self.settings.opacity);
+        self.theme = Theme::from_settings(&self.settings);
+        self.glass_dirty = true;
         self.hover
             .minimal
             .store(self.settings.minimal_notch, Ordering::Relaxed);
