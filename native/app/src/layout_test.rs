@@ -2345,4 +2345,118 @@ mod tests {
             .any(|t| t.contains("Failed: Unable to reach GitHub: timed out")));
         assert!(!en_err.iter().any(|t| t.contains("Gagal menghubungi")));
     }
+
+    #[test]
+    fn test_settings_ai_tab_hook_path_renders_cleanly_at_min_size() {
+        use crate::app::{Noktah, SettingsTab};
+        use eframe::egui::{pos2, vec2, Rect};
+        use noktah_core::{i18n, Lang};
+
+        let before_hook_path = crate::infrastructure::os::hook_in_user_path();
+        let min_win = Rect::from_min_size(pos2(0.0, 0.0), vec2(640.0, 460.0));
+
+        for lang in [Lang::Id, Lang::En] {
+            let ctx = egui::Context::default();
+            let raw = || egui::RawInput {
+                screen_rect: Some(min_win),
+                ..Default::default()
+            };
+
+            // Frame 0 & 1: install production fonts so wrapping matches runtime.
+            let _ = ctx.run(raw(), |ctx| {
+                crate::presentation::fonts::install(ctx);
+                egui::CentralPanel::default().show(ctx, |_ui| {});
+            });
+            let _ = ctx.run(raw(), |_ctx| {});
+
+            let hover = crate::infrastructure::platform::Hover::new(false);
+            let mut app = Noktah::new_for_test("test".to_string(), hover, &ctx);
+            app.settings_tab = SettingsTab::Ai;
+            app.lang = lang;
+            app.settings.language = lang;
+
+            // Check both initial cold-cache frame (frame 0) and settled frame (frame 1).
+            for frame_idx in 0..2 {
+                let output = ctx.run(raw(), |ctx| {
+                    let should_close = app.draw_settings_window(ctx);
+                    assert!(!should_close);
+                });
+
+                assert!(app.hook_path_cached.is_some());
+
+                let mut texts = Vec::new();
+                let mut rects = Vec::new();
+                for cs in &output.shapes {
+                    collect_text_shapes(&cs.shape, &mut texts);
+                    collect_rect_shapes(&cs.shape, &mut rects);
+                }
+
+                let expected_label = i18n::t(lang, "settings.hook_path");
+                let expected_desc = i18n::t(lang, "settings.hook_path_desc");
+
+                let (_, label_rect) = texts
+                    .iter()
+                    .find(|(t, _)| t == expected_label)
+                    .unwrap_or_else(|| {
+                        panic!("lang={lang:?} frame={frame_idx}: missing label '{expected_label}'")
+                    });
+                let (_, desc_rect) = texts
+                    .iter()
+                    .find(|(t, _)| t == expected_desc)
+                    .unwrap_or_else(|| {
+                        panic!("lang={lang:?} frame={frame_idx}: missing desc '{expected_desc}'")
+                    });
+
+                let toggle_rect = rects
+                    .iter()
+                    .find(|r| {
+                        (r.rect.width() - 36.0).abs() < 0.5
+                            && (r.rect.height() - 20.0).abs() < 0.5
+                            && r.rounding.nw >= 900.0
+                            && r.rect.center().y >= label_rect.top() - 4.0
+                            && r.rect.center().y <= desc_rect.bottom() + 4.0
+                    })
+                    .map(|r| r.rect)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "lang={lang:?} frame={frame_idx}: missing hook_path toggle rect near label={label_rect:?} desc={desc_rect:?}"
+                        )
+                    });
+
+                assert!(
+                    min_win.contains_rect(*label_rect),
+                    "lang={lang:?} frame={frame_idx}: label rect {label_rect:?} escaped viewport {min_win:?}"
+                );
+                assert!(
+                    min_win.contains_rect(*desc_rect),
+                    "lang={lang:?} frame={frame_idx}: desc rect {desc_rect:?} escaped viewport {min_win:?}"
+                );
+                assert!(
+                    min_win.contains_rect(toggle_rect),
+                    "lang={lang:?} frame={frame_idx}: toggle rect {toggle_rect:?} escaped viewport {min_win:?}"
+                );
+                assert!(
+                    !label_rect.intersects(toggle_rect)
+                        && label_rect.right() <= toggle_rect.left() + 0.5,
+                    "lang={lang:?} frame={frame_idx}: label rect {label_rect:?} overlapped toggle rect {toggle_rect:?}"
+                );
+                assert!(
+                    !desc_rect.intersects(toggle_rect)
+                        && desc_rect.right() <= toggle_rect.left() + 0.5,
+                    "lang={lang:?} frame={frame_idx}: desc rect {desc_rect:?} overlapped toggle rect {toggle_rect:?}"
+                );
+                assert!(
+                    !label_rect.intersects(*desc_rect)
+                        && label_rect.bottom() <= desc_rect.top() + 0.5,
+                    "lang={lang:?} frame={frame_idx}: label rect {label_rect:?} overlapped desc rect {desc_rect:?}"
+                );
+            }
+        }
+
+        assert_eq!(
+            crate::infrastructure::os::hook_in_user_path(),
+            before_hook_path,
+            "rendering SettingsTab::Ai must never mutate HKCU\\Environment"
+        );
+    }
 }

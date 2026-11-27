@@ -303,6 +303,230 @@ pub fn autostart_enabled() -> bool {
     false
 }
 
+fn normalize_path_entry(entry: &str) -> &str {
+    let trimmed = entry.trim().trim_matches('"').trim();
+    let no_verbatim = trimmed.strip_prefix(r"\\?\").unwrap_or(trimmed);
+    no_verbatim.trim_end_matches(['\\', '/'])
+}
+
+/// Memeriksa apakah daftar `PATH` (dipisah `;`) sudah memuat `dir` (case-insensitive).
+pub(crate) fn path_contains_dir(current: &str, dir: &str) -> bool {
+    let target = normalize_path_entry(dir);
+    if target.is_empty() {
+        return false;
+    }
+    current.split(';').any(|entry| {
+        let norm = normalize_path_entry(entry);
+        !norm.is_empty() && norm.eq_ignore_ascii_case(target)
+    })
+}
+
+/// Menambah atau menghapus `dir` dari string `PATH` secara idempoten dengan menjaga urutan entri lama.
+pub(crate) fn update_path_entries(current: &str, dir: &str, add: bool) -> String {
+    let target = normalize_path_entry(dir);
+    let mut entries: Vec<String> = Vec::new();
+
+    for raw in current.split(';') {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let norm = normalize_path_entry(trimmed);
+        if !add && !target.is_empty() && norm.eq_ignore_ascii_case(target) {
+            continue;
+        }
+        entries.push(trimmed.to_string());
+    }
+
+    if add && !target.is_empty() && !path_contains_dir(current, target) {
+        entries.push(target.to_string());
+    }
+
+    entries.join(";")
+}
+
+#[cfg(windows)]
+fn exe_parent_dir_clean(exe: &std::path::Path) -> Option<String> {
+    let parent = exe.parent()?;
+    let raw = parent.to_string_lossy();
+    let clean = raw.strip_prefix(r"\\?\").unwrap_or(&raw);
+    Some(clean.trim_end_matches(['\\', '/']).to_string())
+}
+
+#[cfg(windows)]
+fn read_user_path_value(
+    key: windows::Win32::System::Registry::HKEY,
+) -> Result<Option<String>, String> {
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::ERROR_FILE_NOT_FOUND;
+    use windows::Win32::System::Registry::{
+        RegQueryValueExW, REG_EXPAND_SZ, REG_SZ, REG_VALUE_TYPE,
+    };
+
+    let val_name: Vec<u16> = "Path\0".encode_utf16().collect();
+    let mut val_type = REG_VALUE_TYPE::default();
+    let mut byte_len = 0u32;
+
+    unsafe {
+        let first = RegQueryValueExW(
+            key,
+            PCWSTR(val_name.as_ptr()),
+            None,
+            Some(&mut val_type),
+            None,
+            Some(&mut byte_len),
+        );
+        if first == ERROR_FILE_NOT_FOUND {
+            return Ok(None);
+        }
+        first.ok().map_err(|e| e.to_string())?;
+        if val_type != REG_SZ && val_type != REG_EXPAND_SZ {
+            return Err("tipe nilai HKCU\\Environment\\Path tidak didukung".into());
+        }
+        if byte_len == 0 {
+            return Ok(Some(String::new()));
+        }
+
+        let mut buf = vec![0u16; (byte_len as usize + 1) / 2];
+        RegQueryValueExW(
+            key,
+            PCWSTR(val_name.as_ptr()),
+            None,
+            Some(&mut val_type),
+            Some(buf.as_mut_ptr() as *mut u8),
+            Some(&mut byte_len),
+        )
+        .ok()
+        .map_err(|e| e.to_string())?;
+
+        let u16_len = (byte_len as usize / 2).min(buf.len());
+        let slice = &buf[..u16_len];
+        let end = slice.iter().position(|&c| c == 0).unwrap_or(slice.len());
+        Ok(Some(String::from_utf16_lossy(&slice[..end])))
+    }
+}
+
+/// Memeriksa apakah folder biner saat ini terdaftar di `HKCU\Environment\Path`.
+#[cfg(windows)]
+pub fn hook_in_user_path() -> bool {
+    use windows::core::PCWSTR;
+    use windows::Win32::System::Registry::{RegCloseKey, RegOpenKeyExW, HKEY, HKEY_CURRENT_USER, KEY_READ};
+
+    let Ok(exe) = std::env::current_exe() else {
+        return false;
+    };
+    let Some(dir) = exe_parent_dir_clean(&exe) else {
+        return false;
+    };
+
+    let subkey: Vec<u16> = "Environment\0".encode_utf16().collect();
+    unsafe {
+        let mut key = HKEY::default();
+        if RegOpenKeyExW(
+            HKEY_CURRENT_USER,
+            PCWSTR(subkey.as_ptr()),
+            0,
+            KEY_READ,
+            &mut key,
+        )
+        .is_err()
+        {
+            return false;
+        }
+        let present = match read_user_path_value(key) {
+            Ok(Some(val)) => path_contains_dir(&val, &dir),
+            _ => false,
+        };
+        let _ = RegCloseKey(key);
+        present
+    }
+}
+
+#[cfg(not(windows))]
+pub fn hook_in_user_path() -> bool {
+    false
+}
+
+/// Menambah/menghapus folder biner saat ini di `HKCU\Environment\Path` dan menyiarkan `WM_SETTINGCHANGE`.
+#[cfg(windows)]
+pub fn set_hook_in_user_path(enabled: bool) -> Result<(), String> {
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::{LPARAM, WPARAM};
+    use windows::Win32::System::Registry::{
+        RegCloseKey, RegOpenKeyExW, RegSetValueExW, HKEY, HKEY_CURRENT_USER, KEY_READ,
+        KEY_SET_VALUE, REG_EXPAND_SZ,
+    };
+    use windows::Win32::UI::WindowsAndMessaging::{
+        SendMessageTimeoutW, HWND_BROADCAST, SMTO_ABORTIFHUNG, WM_SETTINGCHANGE,
+    };
+
+    if cfg!(test) {
+        return Err("build test tidak boleh mengubah User PATH".into());
+    }
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    if looks_like_test_binary(&exe) {
+        return Err("binary test tidak boleh mengubah User PATH".into());
+    }
+    let dir = exe_parent_dir_clean(&exe)
+        .ok_or_else(|| "folder executable tidak ditemukan".to_string())?;
+
+    let subkey: Vec<u16> = "Environment\0".encode_utf16().collect();
+    let val_name: Vec<u16> = "Path\0".encode_utf16().collect();
+
+    unsafe {
+        let mut key = HKEY::default();
+        RegOpenKeyExW(
+            HKEY_CURRENT_USER,
+            PCWSTR(subkey.as_ptr()),
+            0,
+            KEY_READ | KEY_SET_VALUE,
+            &mut key,
+        )
+        .ok()
+        .map_err(|e| e.to_string())?;
+
+        let write_res = (|| -> Result<(), String> {
+            let current = read_user_path_value(key)?.unwrap_or_default();
+            let updated = update_path_entries(&current, &dir, enabled);
+            let encoded: Vec<u16> = updated.encode_utf16().chain(std::iter::once(0)).collect();
+            let bytes = std::slice::from_raw_parts(
+                encoded.as_ptr() as *const u8,
+                encoded.len() * std::mem::size_of::<u16>(),
+            );
+            RegSetValueExW(
+                key,
+                PCWSTR(val_name.as_ptr()),
+                0,
+                REG_EXPAND_SZ,
+                Some(bytes),
+            )
+            .ok()
+            .map_err(|e| e.to_string())
+        })();
+
+        let _ = RegCloseKey(key);
+        write_res?;
+
+        let env_w: Vec<u16> = "Environment\0".encode_utf16().collect();
+        let _ = SendMessageTimeoutW(
+            HWND_BROADCAST,
+            WM_SETTINGCHANGE,
+            WPARAM(0),
+            LPARAM(env_w.as_ptr() as isize),
+            SMTO_ABORTIFHUNG,
+            1000,
+            None,
+        );
+    }
+
+    Ok(())
+}
+
+#[cfg(not(windows))]
+pub fn set_hook_in_user_path(_enabled: bool) -> Result<(), String> {
+    Err("hanya didukung di Windows".into())
+}
+
 /// Menempelkan jendela di atas semua aplikasi lain, atau melepasnya.
 #[cfg(windows)]
 pub fn set_always_on_top(on: bool) {
@@ -382,6 +606,42 @@ mod tests {
         let sebelum = autostart_enabled();
         sync_autostart(true);
         assert_eq!(sebelum, autostart_enabled());
+    }
+
+    #[test]
+    fn path_contains_dir_memeriksa_case_slash_dan_kutip() {
+        let path = r#"C:\Windows\System32; "D:\Apps\Noktah\"; C:\Tools/"#;
+        assert!(path_contains_dir(path, r"d:\apps\noktah"));
+        assert!(path_contains_dir(path, r"\\?\D:\Apps\Noktah\"));
+        assert!(path_contains_dir(path, r"c:\tools"));
+        assert!(!path_contains_dir(path, r"D:\Apps\Noktah2"));
+        assert!(!path_contains_dir(path, ""));
+    }
+
+    #[test]
+    fn update_path_entries_menambah_idempoten_dan_menghapus_bersih() {
+        let base = r"C:\Bin;C:\Users\dev\.cargo\bin";
+        let added = update_path_entries(base, r"\\?\D:\Apps\Noktah\", true);
+        assert_eq!(added, r"C:\Bin;C:\Users\dev\.cargo\bin;D:\Apps\Noktah");
+
+        // Menambah lagi dengan huruf kapital/slash berbeda tidak menduplikasi
+        // dan menjaga urutan asli.
+        let idempotent = update_path_entries(&added, r"d:\apps\noktah/", true);
+        assert_eq!(idempotent, added);
+
+        // Menghapus entri hanya membuang target dan mempertahankan urutan lain.
+        let with_middle = r#"C:\Bin; "D:\Apps\Noktah\"; C:\Tools"#;
+        let removed = update_path_entries(with_middle, r"d:\apps\noktah", false);
+        assert_eq!(removed, r"C:\Bin;C:\Tools");
+
+        // Menghapus satu-satunya entri menghasilkan string kosong.
+        assert_eq!(update_path_entries(r"D:\Apps\Noktah", r"d:\apps\noktah\", false), "");
+    }
+
+    #[test]
+    fn set_hook_in_user_path_ditolak_saat_test() {
+        assert!(set_hook_in_user_path(true).is_err());
+        assert!(set_hook_in_user_path(false).is_err());
     }
 }
 

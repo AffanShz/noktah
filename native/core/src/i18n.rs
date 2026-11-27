@@ -220,6 +220,26 @@ pub const STRINGS: &[(&str, &str, &str)] = &[
         "Jalankan Noktah otomatis saat komputer menyala",
         "Launch Noktah automatically on system startup",
     ),
+    (
+        "settings.hook_path",
+        "Daftarkan noktah-hook ke PATH",
+        "Register noktah-hook in PATH",
+    ),
+    (
+        "settings.hook_path_desc",
+        "Tambahkan folder aplikasi ke User PATH agar noktah-hook dapat dipanggil dari terminal mana pun",
+        "Add app folder to User PATH so noktah-hook works from any terminal",
+    ),
+    (
+        "settings.hook_path_added",
+        "Folder noktah-hook ditambahkan ke User PATH (buka ulang terminal untuk memakai).",
+        "noktah-hook folder added to User PATH (reopen terminal to use).",
+    ),
+    (
+        "settings.hook_path_removed",
+        "Folder noktah-hook dihapus dari User PATH.",
+        "noktah-hook folder removed from User PATH.",
+    ),
     ("settings.version", "Versi", "Version"),
     ("settings.updates", "Pembaruan", "Updates"),
     ("settings.check_update", "Periksa Pembaruan", "Check for Updates"),
