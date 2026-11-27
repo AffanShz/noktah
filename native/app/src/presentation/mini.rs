@@ -7,6 +7,7 @@ use eframe::egui::{self, Color32, FontId, Painter, Rect};
 use noktah_core::model::MediaState;
 use noktah_core::Settings;
 
+#[allow(dead_code)]
 pub struct MiniCtx<'a> {
     pub theme: &'a Theme,
     pub settings: &'a Settings,
@@ -465,8 +466,6 @@ pub fn draw(painter: &Painter, rect: Rect, ctx: &MiniCtx) {
                     true,
                     ctx.t,
                 );
-                slot_x += item_w[used] + 6.0;
-                used += 1;
             }
         }
 

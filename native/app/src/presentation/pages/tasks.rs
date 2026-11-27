@@ -6,7 +6,7 @@
 //! itu yang membuat daftar panjang terbaca sebagai satu blok, bukan tumpukan
 //! kotak.
 
-use crate::app::{Noktah, NotchPage};
+use crate::app::Noktah;
 use crate::presentation::{icons::Icon, style, widgets};
 use eframe::egui::{self, Color32, Id, Rect, Rounding, Sense, Stroke};
 use noktah_core::{format, model::Todo};
@@ -134,19 +134,26 @@ impl Noktah {
             egui::pos2(rect.left() + 34.0, rect.top() + 4.0),
             egui::pos2(rect.right() - 12.0, rect.bottom() - 4.0),
         );
+        let hint = if self.lang == noktah_core::Lang::Id {
+            "Tambah tugas (@HH:MM untuk pengingat)…"
+        } else {
+            "Add a task (@HH:MM for reminder)…"
+        };
         let text_resp = ui.put(
             inner,
             egui::TextEdit::singleline(&mut self.todo_input)
-                .hint_text("Add a task, press Enter…")
+                .hint_text(hint)
                 .desired_width(inner.width())
                 .frame(false)
                 .vertical_align(egui::Align::Center),
         );
         if text_resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-            let text = self.todo_input.trim().to_string();
-            if !text.is_empty() {
-                self.todos
-                    .insert(0, Todo::new(format!("t_{now_ms}"), text, now_ms));
+            let (cleaned_text, due) = noktah_core::reminders::extract_inline_due(&self.todo_input, now_ms);
+            let trimmed = cleaned_text.trim();
+            if !trimmed.is_empty() {
+                let mut todo = Todo::new(format!("t_{now_ms}"), trimmed.to_string(), now_ms);
+                todo.due_at = due;
+                self.todos.insert(0, todo);
                 self.todo_input.clear();
                 self.save_todos();
             }

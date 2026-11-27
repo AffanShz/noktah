@@ -18,7 +18,59 @@ use noktah_core::reminders;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum BlurCaptureAction {
+    None,
+    CaptureFresh,
+    ReprocessCached,
+}
+
 impl Noktah {
+    /// Menentukan aksi capture/reprocess blur latar belakang notch.
+    /// Saat notch benar-benar tertutup (`open.target <= 0.5 && open.pos <= 0.05`),
+    /// selalu mengembalikan `None` agar memory trim saat idle tidak langsung memicu
+    /// tangkap layar ulang di frame berikutnya.
+    pub(crate) fn blur_capture_action(&self) -> BlurCaptureAction {
+        if !self.settings.glass_effect.uses_blur() {
+            return BlurCaptureAction::None;
+        }
+        if self.open.target > 0.5 && (self.open.pos < 0.1 || self.glass_raw_capture.is_none()) {
+            BlurCaptureAction::CaptureFresh
+        } else if self.glass_dirty
+            && (self.open.target > 0.5 || self.open.pos > 0.05)
+            && self.glass_raw_capture.is_some()
+        {
+            BlurCaptureAction::ReprocessCached
+        } else {
+            BlurCaptureAction::None
+        }
+    }
+
+    /// Lebar target pill saat panel tertutup atau dalam masa transisi.
+    pub(crate) fn compute_pill_target(&self) -> f32 {
+        let peek = self.peek_until.map(|t| Instant::now() < t).unwrap_or(false);
+        let banner_active = self
+            .banner
+            .as_ref()
+            .map(|(_, at)| at.elapsed().as_secs_f32() < 4.0)
+            .unwrap_or(false);
+        let media_in_mini = self.show_media_in_mini();
+
+        if banner_active {
+            340.0
+        } else if peek && media_in_mini {
+            self.settings.mini_width(true, true)
+        } else if media_in_mini {
+            self.settings.mini_width(true, self.has_lyrics())
+        } else if self.agent.active && self.settings.mini_agent {
+            260.0
+        } else if self.settings.custom_tiles_enabled && self.custom_tiles.pinned_mini().is_some() {
+            220.0
+        } else {
+            180.0
+        }
+    }
+
     /// Pegas posisi baris lirik sedang bergerak DI HALAMAN yang menggambarnya?
     ///
     /// `lyric_anim_pos` hanya dimajukan `draw_page_music`. Di halaman lain atau
@@ -136,8 +188,7 @@ impl Noktah {
                 && self.system_tiles_mode
                 && !self.custom_tiles.is_empty()
             {
-                let now_utc = chrono::Utc::now().timestamp_millis();
-                if let Some(rem_ms) = self.custom_tiles.next_expiry_in_ms(now_utc) {
+                if let Some(rem_ms) = self.custom_tiles.next_expiry_in_ms(now_ms) {
                     return Duration::from_millis(rem_ms.clamp(16, 500));
                 }
             }
@@ -178,8 +229,7 @@ impl Noktah {
             }
         }
 
-        let now_utc = chrono::Utc::now().timestamp_millis();
-        if let Some(rem_ms) = self.custom_tiles.next_expiry_in_ms(now_utc) {
+        if let Some(rem_ms) = self.custom_tiles.next_expiry_in_ms(now_ms) {
             let d = Duration::from_millis(rem_ms.max(16));
             if d < tunggu {
                 tunggu = d;
@@ -201,6 +251,12 @@ impl eframe::App for Noktah {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.update_frame(ctx);
+    }
+}
+
+impl Noktah {
+    pub(crate) fn update_frame(&mut self, ctx: &egui::Context) {
         if self.frames == 0 {
             let mut visuals = egui::Visuals::dark();
             // Background warna gelap elegan untuk input TextEdit (#1C1D22) agar batas kotaknya jelas di atas latar hitam
@@ -341,6 +397,10 @@ impl eframe::App for Noktah {
             }
         }
 
+        // Tarik event IPC lebih awal agar PermissionRequest atau tile --pin-mini
+        // langsung mengupdate target bentuk dan pending permissions di frame yang sama
+        self.poll_ipc();
+
         // Guard anti-stuck: jika cursor di luar dan tidak ada antrean approval,
         // panel wajib menutup kembali ke minimize.
         if !inside && self.pending_permissions.is_empty() && self.open.target > 0.0 {
@@ -355,13 +415,14 @@ impl eframe::App for Noktah {
 
         if berubah {
             self.hovered = inside;
-            let target = if inside { 1.0 } else { 0.0 };
+            let should_open = inside || !self.pending_permissions.is_empty();
+            let target = if should_open { 1.0 } else { 0.0 };
             self.open.target = target;
             self.open_h.target = target;
             // Buka: lebar dulu, tinggi menyusul (terasa melar).
             // Tutup: tinggi dulu, lebar menyusul (terasa mengempis).
-            if inside {
-                if self.open.pos < 0.05 && self.pending_permissions.is_empty() {
+            if should_open {
+                if inside && self.open.pos < 0.05 && self.pending_permissions.is_empty() {
                     if let Some(p) = self.resolve_default_page() {
                         self.current_page = p;
                     }
@@ -372,6 +433,10 @@ impl eframe::App for Noktah {
                 self.open_h.set_spec(MORPH_CLOSE_H);
                 self.open.set_spec(MORPH_CLOSE_W);
             }
+        }
+        if !self.pending_permissions.is_empty() {
+            self.open.target = 1.0;
+            self.open_h.target = 1.0;
         }
         self.hover
             .expanded
@@ -424,26 +489,13 @@ impl eframe::App for Noktah {
             .as_ref()
             .map(|(_, at)| at.elapsed().as_secs_f32() < 4.0)
             .unwrap_or(false);
-        let media_in_mini = self.show_media_in_mini();
 
         let now_utc_ms = chrono::Utc::now().timestamp_millis();
         if self.custom_tiles.prune_expired(now_utc_ms) && self.custom_tiles.is_empty() {
             self.system_tiles_mode = false;
         }
 
-        self.pill.target = if banner_active {
-            340.0
-        } else if peek && media_in_mini {
-            self.settings.mini_width(true, true)
-        } else if media_in_mini {
-            self.settings.mini_width(true, self.has_lyrics())
-        } else if self.agent.active && self.settings.mini_agent {
-            260.0
-        } else if self.settings.custom_tiles_enabled && self.custom_tiles.pinned_mini().is_some() {
-            220.0
-        } else {
-            180.0
-        };
+        self.pill.target = self.compute_pill_target();
 
         // Dock terbuka selama kursor berada di daerahnya, dengan jeda 250 ms
         // setelah kursor terakhir terlihat. Jeda itu yang membuat kursor bisa
@@ -619,7 +671,6 @@ impl eframe::App for Noktah {
         self.poll_ai();
         self.poll_weather();
         self.poll_quota();
-        self.poll_ipc();
         self.poll_updater();
         self.poll_calendar();
         self.poll_audio_device();
@@ -669,25 +720,51 @@ impl eframe::App for Noktah {
         // Mode Kaca: tangkap layar dan kaburkan untuk latar panel notch
         if !self.settings.glass_effect.uses_blur() {
             self.glass_tex = None;
+            self.glass_raw_capture = None;
             self.glass_dirty = false;
-        } else if (self.open.target > 0.5 && self.open.pos < 0.1)
-            || self.glass_dirty
-            || (self.open.pos > 0.2 && self.glass_tex.is_none())
-        {
-            if let Some((x, y, w, h)) = crate::infrastructure::platform::window_rect() {
-                if let Some(gambar) = crate::infrastructure::blur::capture(
-                    x,
-                    y,
-                    w,
-                    h,
-                    self.settings.glass_blur_radius,
-                    self.settings.glass_saturation,
-                ) {
-                    self.glass_tex =
-                        Some(ctx.load_texture("glass-bg", gambar, egui::TextureOptions::LINEAR));
+        } else {
+            match self.blur_capture_action() {
+                BlurCaptureAction::CaptureFresh => {
+                    if let Some((x, y, w, h)) = crate::infrastructure::platform::window_rect() {
+                        if let Some((dw, dh, raw)) =
+                            crate::infrastructure::blur::capture_raw(x, y, w, h)
+                        {
+                            let img = crate::infrastructure::blur::process_raw(
+                                dw,
+                                dh,
+                                &raw,
+                                self.settings.glass_blur_radius,
+                                self.settings.glass_saturation,
+                            );
+                            self.glass_tex = Some(ctx.load_texture(
+                                "glass-bg",
+                                img,
+                                egui::TextureOptions::LINEAR,
+                            ));
+                            self.glass_raw_capture = Some((dw, dh, raw));
+                        }
+                    }
+                    self.glass_dirty = false;
                 }
+                BlurCaptureAction::ReprocessCached => {
+                    if let Some((dw, dh, ref raw)) = self.glass_raw_capture {
+                        let img = crate::infrastructure::blur::process_raw(
+                            dw,
+                            dh,
+                            raw,
+                            self.settings.glass_blur_radius,
+                            self.settings.glass_saturation,
+                        );
+                        self.glass_tex = Some(ctx.load_texture(
+                            "glass-bg",
+                            img,
+                            egui::TextureOptions::LINEAR,
+                        ));
+                    }
+                    self.glass_dirty = false;
+                }
+                BlurCaptureAction::None => {}
             }
-            self.glass_dirty = false;
         }
 
         // --- gambar -----------------------------------------------------
@@ -732,6 +809,7 @@ impl eframe::App for Noktah {
             let since = *self.idle_since.get_or_insert(now);
             if since.elapsed() >= Duration::from_millis(3000) && !self.trimmed {
                 crate::infrastructure::os::trim_working_set();
+                self.glass_raw_capture = None;
                 self.trimmed = true;
             }
         } else {
@@ -746,5 +824,113 @@ impl eframe::App for Noktah {
         } else {
             ctx.request_repaint_after(self.next_wake(now_ms));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::infrastructure::platform::Hover;
+    use noktah_core::settings::GlassEffect;
+
+    #[test]
+    fn closed_trimmed_idle_frame_never_triggers_blur_capture() {
+        let ctx = egui::Context::default();
+        let hover = Hover::new(false);
+        let mut app = Noktah::new_for_test("test".to_string(), hover, &ctx);
+        app.settings.glass_effect = GlassEffect::Full;
+        app.open.target = 0.0;
+        app.open.pos = 0.0;
+        app.glass_raw_capture = None;
+        app.trimmed = true;
+        app.glass_dirty = false;
+        assert_eq!(app.blur_capture_action(), BlurCaptureAction::None);
+
+        // Even if glass_dirty is set while closed and trimmed, stay None.
+        app.glass_dirty = true;
+        assert_eq!(app.blur_capture_action(), BlurCaptureAction::None);
+
+        // Opening from closed triggers CaptureFresh.
+        app.open.target = 1.0;
+        app.open.pos = 0.0;
+        assert_eq!(app.blur_capture_action(), BlurCaptureAction::CaptureFresh);
+
+        // Already open with cached capture and glass_dirty triggers ReprocessCached (no recapture).
+        app.open.pos = 1.0;
+        app.glass_raw_capture = Some((4, 4, vec![0; 64]));
+        app.glass_dirty = true;
+        assert_eq!(app.blur_capture_action(), BlurCaptureAction::ReprocessCached);
+
+        // Open with clean cache triggers None.
+        app.glass_dirty = false;
+        assert_eq!(app.blur_capture_action(), BlurCaptureAction::None);
+
+        // Open with missing cache triggers CaptureFresh.
+        app.glass_raw_capture = None;
+        assert_eq!(app.blur_capture_action(), BlurCaptureAction::CaptureFresh);
+    }
+
+    #[test]
+    fn permission_request_takes_precedence_over_same_frame_hover_exit() {
+        use crate::infrastructure::ipc::IpcEvent;
+        use noktah_core::model::PermissionDecision;
+        use std::sync::mpsc::{channel, sync_channel};
+
+        let ctx = egui::Context::default();
+        let hover = Hover::new(false);
+        let mut app = Noktah::new_for_test("test".to_string(), hover.clone(), &ctx);
+        app.settings.glass_effect = GlassEffect::Off;
+        app.settings.calendar_enabled = false;
+        app.settings.audio_hud_enabled = false;
+
+        // Simulate notch currently hovered and expanded.
+        app.hovered = true;
+        app.open.target = 1.0;
+        app.open.pos = 1.0;
+        app.open_h.target = 1.0;
+        app.open_h.pos = 1.0;
+        app.current_page = NotchPage::Music;
+
+        // Cursor moves well outside the notch in this frame.
+        if let Ok(mut pos) = hover.pos.lock() {
+            *pos = (0.0, 600.0);
+        }
+
+        // PermissionRequest arrives via IPC in the exact same frame as hover exit.
+        let (ipc_tx, ipc_rx) = channel();
+        app.ipc.rx = ipc_rx;
+        let (resp_tx, _resp_rx) = sync_channel::<PermissionDecision>(1);
+        ipc_tx
+            .send(IpcEvent::PermissionRequest {
+                request_id: "perm-same-frame".into(),
+                tool_name: "Bash".into(),
+                tool_input: serde_json::json!({"command": "echo hi"}),
+                suggestions: vec![],
+                session_title: Some("test-session".into()),
+                responder: resp_tx,
+            })
+            .unwrap();
+
+        let _ = ctx.run(Default::default(), |ctx| {
+            app.update_frame(ctx);
+        });
+
+        assert!(!app.hovered, "cursor exited notch so hovered should become false");
+        assert!(!app.pending_permissions.is_empty());
+        assert_eq!(app.open.target, 1.0, "pending permission must keep open.target == 1.0");
+        assert_eq!(app.open_h.target, 1.0, "pending permission must keep open_h.target == 1.0");
+        assert_eq!(app.current_page, NotchPage::Agent);
+        assert!(hover.expanded.load(Ordering::Relaxed));
+
+        // Once canceled while cursor remains outside, panel closes cleanly.
+        ipc_tx
+            .send(IpcEvent::PermissionCanceled("perm-same-frame".into()))
+            .unwrap();
+        let _ = ctx.run(Default::default(), |ctx| {
+            app.update_frame(ctx);
+        });
+        assert!(app.pending_permissions.is_empty());
+        assert_eq!(app.open.target, 0.0);
+        assert_eq!(app.open_h.target, 0.0);
     }
 }

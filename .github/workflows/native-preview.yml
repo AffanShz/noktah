@@ -15,6 +15,11 @@ on:
     paths:
       - "native/**"
       - ".github/workflows/native-preview.yml"
+  pull_request:
+    branches: [develop, main]
+    paths:
+      - "native/**"
+      - ".github/workflows/native-preview.yml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

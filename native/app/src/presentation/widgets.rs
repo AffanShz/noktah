@@ -168,6 +168,7 @@ pub fn chip_button(ui: &mut egui::Ui, label: &str, aktif: bool, theme: &Theme) -
 }
 
 /// Tombol bulat bergaya kaca, dipakai untuk kontrol pemutar.
+#[allow(dead_code)]
 pub fn circle_button(
     ui: &mut egui::Ui,
     glyph: &str,
@@ -221,12 +222,13 @@ pub fn circle_button(
 }
 
 /// Tombol kontrol media bergaya Spotify dengan ikon vektor dan efek hover/tekan tactile.
+#[allow(dead_code)]
 pub fn spotify_media_button(
     ui: &mut egui::Ui,
     icon: Icon,
     diameter: f32,
     utama: bool,
-    theme: &Theme,
+    _theme: &Theme,
 ) -> bool {
     let (rect, resp) =
         ui.allocate_exact_size(egui::vec2(diameter, diameter), egui::Sense::click());
@@ -289,6 +291,7 @@ pub fn spotify_media_button(
 }
 
 /// Tombol ikon polos (tanpa latar) untuk tombol tutup dan aksi header.
+#[allow(dead_code)]
 pub fn icon_hit(
     ui: &mut egui::Ui,
     icon: Icon,
@@ -315,6 +318,7 @@ pub fn icon_hit(
 }
 
 /// Satu tab di bilah header: tombol ikon bersih berukuran 28×28 px tanpa tag teks keterangan.
+#[allow(dead_code)]
 pub fn tab_button(
     ui: &mut egui::Ui,
     icon: Icon,
@@ -376,6 +380,7 @@ pub fn tab_button(
 
 
 /// Pil filter (Semua / Aktif / Selesai) dengan latar aksen saat aktif.
+#[allow(dead_code)]
 pub fn pill(ui: &mut egui::Ui, label: &str, aktif: bool, theme: &Theme) -> bool {
     let font = egui::FontId::proportional(T_BODY);
     let g = ui.painter().layout_no_wrap(label.to_owned(), font, theme.ink);
@@ -426,6 +431,7 @@ pub fn pill(ui: &mut egui::Ui, label: &str, aktif: bool, theme: &Theme) -> bool 
 }
 
 /// Tombol terisi aksen penuh, dipakai untuk aksi utama (mis. "Tambah").
+#[allow(dead_code)]
 pub fn solid_button(ui: &mut egui::Ui, label: &str, theme: &Theme) -> bool {
     let font = egui::FontId::proportional(T_BODY);
     let g = ui.painter().layout_no_wrap(label.to_owned(), font, theme.ink);
@@ -462,6 +468,7 @@ pub fn solid_button(ui: &mut egui::Ui, label: &str, theme: &Theme) -> bool {
 }
 
 /// Tombol utama berikon (mis. "Mulai" di tab Fokus).
+#[allow(dead_code)]
 pub fn primary_button(ui: &mut egui::Ui, icon: Icon, label: &str, theme: &Theme) -> bool {
     let font = egui::FontId::proportional(T_BODY);
     let g = ui.painter().layout_no_wrap(label.to_owned(), font, theme.ink);
@@ -498,6 +505,7 @@ pub fn primary_button(ui: &mut egui::Ui, icon: Icon, label: &str, theme: &Theme)
 }
 
 /// Tombol sekunder bergaris (mis. "Ulang" di tab Fokus).
+#[allow(dead_code)]
 pub fn ghost_button(ui: &mut egui::Ui, icon: Icon, label: &str, theme: &Theme) -> bool {
     let font = egui::FontId::proportional(T_BODY);
     let g = ui.painter().layout_no_wrap(label.to_owned(), font, theme.dim);
@@ -734,11 +742,13 @@ pub fn play_button(ui: &mut egui::Ui, icon: Icon, size: f32, _theme: &Theme) -> 
 
 /// Headline untuk kartu surface besar — angka satu baris yang jadi alasan
 /// halaman ini ada (stat Metrik sistem, sisa waktu Pomodoro, hitungan air).
+#[allow(dead_code)]
 pub fn card_headline(s: impl Into<String>, color: egui::Color32) -> egui::RichText {
     style::card_headline(s, color)
 }
 
 /// Tombol lebar penuh dengan ikon di kiri dan label di tengah.
+#[allow(dead_code)]
 pub fn wide_button(ui: &mut egui::Ui, icon: Icon, label: &str, theme: &Theme) -> bool {
     let w = ui.available_width();
     let (rect, resp) = ui.allocate_exact_size(egui::vec2(w, 40.0), egui::Sense::click());
@@ -769,6 +779,7 @@ pub fn wide_button(ui: &mut egui::Ui, icon: Icon, label: &str, theme: &Theme) ->
 }
 
 /// Menampilkan waktu mm:ss dengan animasi rolling digit mekanis untuk detik yang berganti (Odometer effect ala Mochy).
+#[allow(dead_code)]
 pub fn odometer_time(
     ui: &mut egui::Ui,
     time_s: f32,
@@ -993,6 +1004,7 @@ pub fn spark_tile(
 ///
 /// Dipakai Metrik sistem, sisa waktu Pomodoro, dan hitungan air. Satu bentuk
 /// untuk satu peran: "satu angka yang jadi alasan halaman ini ada".
+#[allow(dead_code)]
 pub fn stat_tile(
     ui: &mut egui::Ui,
     lebar: f32,

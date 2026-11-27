@@ -50,6 +50,7 @@ impl Store for FakeStore {
     }
 }
 
+#[allow(dead_code)]
 impl FakeStore {
     /// Nama-nama berkas yang pernah ditulis. Dipakai test untuk memastikan
     /// use case benar-benar menyimpan, bukan hanya mengubah state di memori.
@@ -60,6 +61,7 @@ impl FakeStore {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Default)]
 pub struct FakeSecret {
     value: Arc<Mutex<String>>,
@@ -77,6 +79,7 @@ impl SecretStore for FakeSecret {
 }
 
 /// Jaringan palsu dengan jawaban yang bisa diatur per test.
+#[allow(dead_code)]
 #[derive(Clone, Default)]
 pub struct FakeNetwork {
     pub weather: Option<noktah_core::model::WeatherNow>,
@@ -119,6 +122,7 @@ impl Network for FakeNetwork {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Default)]
 pub struct FakeSystem {
     pub charging: bool,
@@ -148,6 +152,7 @@ impl SystemInfo for FakeSystem {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Default)]
 pub struct FakeActions {
     pub calls: Rc<RefCell<Vec<String>>>,
@@ -171,6 +176,7 @@ impl SystemActions for FakeActions {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Default)]
 pub struct FakeMedia {
     pub snapshot: Option<MediaSnapshot>,
@@ -182,6 +188,7 @@ impl MediaSource for FakeMedia {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct FakeClock {
     pub ms: Arc<Mutex<i64>>,
@@ -195,6 +202,7 @@ impl Default for FakeClock {
     }
 }
 
+#[allow(dead_code)]
 impl FakeClock {
     pub fn at(ms: i64) -> Self {
         Self {

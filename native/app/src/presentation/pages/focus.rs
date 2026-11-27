@@ -5,7 +5,7 @@
 //! sama dengan tombol Mulai/Reset, bukan deretan chip terpisah. Satu baris
 //! aksi berarti mata membaca "mode apa" dan "mulai" sebagai satu kalimat.
 
-use crate::app::{Noktah, NotchPage};
+use crate::app::Noktah;
 use crate::presentation::{icons::Icon, style, widgets};
 use eframe::egui::{self, Color32, Rect, Rounding, Sense};
 use noktah_core::model::PomodoroMode;

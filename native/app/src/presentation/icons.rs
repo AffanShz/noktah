@@ -13,9 +13,11 @@ pub enum Icon {
     Music,
     Tasks,
     Timer,
+    #[allow(dead_code)]
     Activity,
     Sparkles,
     Settings,
+    #[allow(dead_code)]
     Close,
     Plus,
     Cpu,
@@ -26,20 +28,28 @@ pub enum Icon {
     Pause,
     Prev,
     Next,
+    #[allow(dead_code)]
     PlayCircle,
+    #[allow(dead_code)]
     PauseCircle,
     ChevronLeft,
     ChevronRight,
+    #[allow(dead_code)]
     ChatBubble,
+    #[allow(dead_code)]
     Lyrics,
     LyricsOn,
     LyricsOff,
     System,
     Speaker,
+    #[allow(dead_code)]
     VolumeOn,
+    #[allow(dead_code)]
     VolumeMute,
+    #[allow(dead_code)]
     Water,
     Bolt,
+    #[allow(dead_code)]
     Reset,
     Refresh,
     ArrowUpRight,
@@ -58,6 +68,7 @@ pub enum Icon {
     Todo,
     Focus,
     AI,
+    #[allow(dead_code)]
     AiQuota,
     About,
     Gear,
@@ -129,19 +140,6 @@ impl<'a> Pen<'a> {
         let c = self.pt(cx, cy);
         let rr = (r / BOX) * self.rect.width();
         self.painter.circle_stroke(c, rr, self.stroke);
-    }
-
-    fn fill_circle(&self, cx: f32, cy: f32, r: f32, color: Color32) {
-        let c = self.pt(cx, cy);
-        let rr = (r / BOX) * self.rect.width();
-        self.painter.circle_filled(c, rr, color);
-    }
-
-    fn boxed(&self, x0: f32, y0: f32, x1: f32, y1: f32, rounding: f32) {
-        let r = Rect::from_min_max(self.pt(x0, y0), self.pt(x1, y1));
-        let rad = (rounding / BOX) * self.rect.width();
-        self.painter
-            .rect_stroke(r, egui::Rounding::same(rad), self.stroke);
     }
 
     fn fill_poly(&self, pts: &[(f32, f32)], color: Color32) {

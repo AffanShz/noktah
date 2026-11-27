@@ -100,11 +100,14 @@ impl Default for GlassEffect {
 impl GlassEffect {
     pub const ALL: [GlassEffect; 3] = [GlassEffect::Off, GlassEffect::Light, GlassEffect::Full];
 
-    pub fn label(self) -> &'static str {
-        match self {
-            GlassEffect::Off => "Mati",
-            GlassEffect::Light => "Ringan",
-            GlassEffect::Full => "Penuh",
+    pub fn label(self, lang: Lang) -> &'static str {
+        match (self, lang) {
+            (GlassEffect::Off, Lang::Id) => "Mati",
+            (GlassEffect::Off, Lang::En) => "Off",
+            (GlassEffect::Light, Lang::Id) => "Ringan",
+            (GlassEffect::Light, Lang::En) => "Light",
+            (GlassEffect::Full, Lang::Id) => "Penuh",
+            (GlassEffect::Full, Lang::En) => "Full",
         }
     }
 
@@ -171,14 +174,15 @@ impl Provider {
         Provider::Ollama,
     ];
 
-    pub fn label(self) -> &'static str {
-        match self {
-            Provider::Openai => "OpenAI",
-            Provider::Gemini => "Google Gemini",
-            Provider::Openrouter => "OpenRouter",
-            Provider::Groq => "Groq",
-            Provider::Deepseek => "DeepSeek",
-            Provider::Ollama => "Ollama (lokal)",
+    pub fn label(self, lang: Lang) -> &'static str {
+        match (self, lang) {
+            (Provider::Openai, _) => "OpenAI",
+            (Provider::Gemini, _) => "Google Gemini",
+            (Provider::Openrouter, _) => "OpenRouter",
+            (Provider::Groq, _) => "Groq",
+            (Provider::Deepseek, _) => "DeepSeek",
+            (Provider::Ollama, Lang::Id) => "Ollama (lokal)",
+            (Provider::Ollama, Lang::En) => "Ollama (local)",
         }
     }
 
@@ -273,11 +277,14 @@ impl MonitorMode {
         MonitorMode::Cursor,
     ];
 
-    pub fn label(self) -> &'static str {
-        match self {
-            MonitorMode::Primary => "Layar Utama",
-            MonitorMode::Cursor => "Ikuti Kursor",
-            MonitorMode::Index(_) => "Monitor Tertentu",
+    pub fn label(self, lang: Lang) -> &'static str {
+        match (self, lang) {
+            (MonitorMode::Primary, Lang::Id) => "Layar Utama",
+            (MonitorMode::Primary, Lang::En) => "Primary Screen",
+            (MonitorMode::Cursor, Lang::Id) => "Ikuti Kursor",
+            (MonitorMode::Cursor, Lang::En) => "Follow Cursor",
+            (MonitorMode::Index(_), Lang::Id) => "Monitor Tertentu",
+            (MonitorMode::Index(_), Lang::En) => "Specific Monitor",
         }
     }
 }
@@ -526,12 +533,16 @@ impl MiniPreset {
         MiniPreset::Lengkap,
     ];
 
-    pub fn label(self) -> &'static str {
-        match self {
-            MiniPreset::Standar => "Standar",
-            MiniPreset::ModeLirik => "Mode Lirik",
-            MiniPreset::FokusLirik => "Fokus Lirik",
-            MiniPreset::Lengkap => "Lengkap",
+    pub fn label(self, lang: Lang) -> &'static str {
+        match (self, lang) {
+            (MiniPreset::Standar, Lang::Id) => "Standar",
+            (MiniPreset::Standar, Lang::En) => "Standard",
+            (MiniPreset::ModeLirik, Lang::Id) => "Mode Lirik",
+            (MiniPreset::ModeLirik, Lang::En) => "Lyrics Mode",
+            (MiniPreset::FokusLirik, Lang::Id) => "Fokus Lirik",
+            (MiniPreset::FokusLirik, Lang::En) => "Lyrics Focus",
+            (MiniPreset::Lengkap, Lang::Id) => "Lengkap",
+            (MiniPreset::Lengkap, Lang::En) => "Full",
         }
     }
 }

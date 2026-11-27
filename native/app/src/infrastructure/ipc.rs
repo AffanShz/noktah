@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 use windows::core::{HSTRING, PCWSTR, PWSTR};
 use windows::Win32::Foundation::{
     CloseHandle, GetLastError, LocalFree, ERROR_IO_PENDING, ERROR_PIPE_CONNECTED,
-    HANDLE, HLOCAL, INVALID_HANDLE_VALUE,
+    HANDLE, HLOCAL,
 };
 use windows::Win32::Security::Authorization::ConvertSidToStringSidW;
 use windows::Win32::Security::{GetTokenInformation, TokenUser, TOKEN_QUERY, TOKEN_USER};
@@ -58,14 +58,28 @@ pub struct IpcHandle {
     stop_event: SendHandle,
 }
 
+impl IpcHandle {
+    #[cfg(test)]
+    pub fn dummy() -> Self {
+        let (_, rx) = channel();
+        Self {
+            rx,
+            running: Arc::new(AtomicBool::new(false)),
+            stop_event: SendHandle(0),
+        }
+    }
+}
+
 impl Drop for IpcHandle {
     fn drop(&mut self) {
         self.running.store(false, Ordering::SeqCst);
-        unsafe {
-            let handle = HANDLE(self.stop_event.0 as *mut c_void);
-            if !handle.is_invalid() {
-                let _ = SetEvent(handle);
-                let _ = CloseHandle(handle);
+        if self.stop_event.0 != 0 {
+            unsafe {
+                let handle = HANDLE(self.stop_event.0 as *mut c_void);
+                if !handle.is_invalid() {
+                    let _ = SetEvent(handle);
+                    let _ = CloseHandle(handle);
+                }
             }
         }
     }

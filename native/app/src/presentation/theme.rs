@@ -28,11 +28,6 @@ pub fn mix(a: Color32, b: Color32, t: f32) -> Color32 {
     )
 }
 
-/// Skala alpha warna; `k` 1.0 = apa adanya, 0.0 = transparan.
-pub fn alpha_scale(c: Color32, k: f32) -> Color32 {
-    Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), ((c.a() as f32) * k.clamp(0.0, 1.0)) as u8)
-}
-
 /// Deret `n` warna dari `a` ke `b` — dipakai menggambar busur bergradasi
 /// sebagai potongan garis, karena `egui::Shape::line` hanya menerima satu warna.
 pub fn gradient(a: Color32, b: Color32, n: usize) -> Vec<Color32> {

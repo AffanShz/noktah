@@ -98,6 +98,7 @@ pub fn data_dir() -> Option<PathBuf> {
 }
 
 /// Apakah 9Router terpasang di mesin ini sama sekali.
+#[allow(dead_code)]
 pub fn terdeteksi() -> bool {
     data_dir().map(|d| d.join("machine-id").is_file()).unwrap_or(false)
 }
@@ -394,6 +395,7 @@ fn fetch_connection(
 ///
 /// Mengembalikan `QuotaSnapshot` walau sebagian akun gagal — satu akun
 /// bermasalah tidak boleh mengosongkan seluruh kartu.
+#[allow(dead_code)]
 pub fn fetch() -> QuotaSnapshot {
     fetch_partial()
 }
@@ -599,6 +601,15 @@ fn fetch_partial() -> QuotaSnapshot {
 pub struct QuotaHandle {
     pub rx: std::sync::mpsc::Receiver<QuotaSnapshot>,
     pub tx: std::sync::mpsc::Sender<()>,
+}
+
+impl QuotaHandle {
+    #[cfg(test)]
+    pub fn dummy() -> Self {
+        let (_, rx) = std::sync::mpsc::channel();
+        let (tx, _) = std::sync::mpsc::channel();
+        Self { rx, tx }
+    }
 }
 
 /// Jarak antar-penyegaran. Kuota 5 jam tidak berubah per detik, dan tiap
