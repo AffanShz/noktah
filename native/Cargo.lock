@@ -1248,7 +1248,7 @@ checksum = "2bf50223579dc7cdcfb3bfcacf7069ff68243f8c363f62ffa99cf000a6b9c451"
 
 [[package]]
 name = "noktah-core"
-version = "1.6.1"
+version = "2.0.0"
 dependencies = [
  "chrono",
  "serde",
@@ -1257,16 +1257,17 @@ dependencies = [
 
 [[package]]
 name = "noktah-hook"
-version = "1.6.1"
+version = "2.0.0"
 dependencies = [
  "serde",
  "serde_json",
  "windows",
+ "winresource",
 ]
 
 [[package]]
 name = "noktah-native"
-version = "1.6.1"
+version = "2.0.0"
 dependencies = [
  "chrono",
  "eframe",

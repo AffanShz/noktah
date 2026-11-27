@@ -1043,6 +1043,44 @@ impl Noktah {
 
             widgets::card_divider(ui);
 
+            let mut in_path = *self
+                .hook_path_cached
+                .get_or_insert_with(crate::infrastructure::os::hook_in_user_path);
+            widgets::row_desc(
+                ui,
+                i18n::t(lang, "settings.hook_path"),
+                i18n::t(lang, "settings.hook_path_desc"),
+                &theme,
+                |ui| {
+                    if widgets::toggle(ui, &mut in_path, &theme) {
+                        match crate::infrastructure::os::set_hook_in_user_path(in_path) {
+                            Ok(()) => {
+                                self.hook_path_cached = Some(in_path);
+                                let msg_key = if in_path {
+                                    "settings.hook_path_added"
+                                } else {
+                                    "settings.hook_path_removed"
+                                };
+                                self.banner = Some((
+                                    i18n::t(lang, msg_key).to_string(),
+                                    std::time::Instant::now(),
+                                ));
+                            }
+                            Err(err) => {
+                                self.hook_path_cached =
+                                    Some(crate::infrastructure::os::hook_in_user_path());
+                                self.banner = Some((
+                                    format!("PATH: {err}"),
+                                    std::time::Instant::now(),
+                                ));
+                            }
+                        }
+                    }
+                },
+            );
+
+            widgets::card_divider(ui);
+
             widgets::row_desc(
                 ui,
                 if is_id {

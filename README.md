@@ -57,6 +57,14 @@ Saat minimized, notch menyusut menjadi garis tipis (pill) yang dinamis:
 - Mendukung model AI pilihanmu sendiri: Google Gemini, OpenAI, OpenRouter, Groq, DeepSeek, atau model lokal Ollama (`http://localhost:11434/v1`).
 - Kunci API dienkripsi menggunakan **Windows DPAPI** — hanya dapat didekripsi oleh akun pengguna di PC yang sama, tidak pernah disimpan dalam format teks biasa di `settings.json`.
 
+### 6. Custom Status Tiles (`noktah-hook`)
+- Terima hingga 6 kartu status dan metrik kustom (CI build, server, kuota, sensor) langsung ke halaman **System** lewat perintah `noktah-hook tile`.
+- Mendukung nada status, progres 0–100%, kadaluwarsa otomatis (`--ttl`), serta penyematan ringkas ke pill minimal (`--pin-mini`).
+
+### 7. Liquid Glass & Preset Tema
+- 5 preset tampilan kurasi (*Obsidian*, *Liquid Glass*, *Midnight Frost*, *Aurora*, *Emerald Slate*) di **Setelan → Tampilan**.
+- Kustomisasi warna aksen `#RRGGBB`, *Edge Specular Rim*, *Glass Blur Radius*, *Saturation Boost*, serta ekspor/impor preset JSON satu klik.
+
 ---
 
 ## Mengendalikan Notch
@@ -84,16 +92,32 @@ Saat notch tertutup, tampilannya menyusut menjadi kapsul ramping (pill). Kamu da
 
 ## Unduh & Pemasangan
 
+### Via `winget` (Rekomendasi)
+
+```powershell
+winget install AffanShz.Noktah
+```
+
+Instalasi `winget` memasang paket portabel (*nested portable installer*) ke cakupan pengguna secara bawaan (mendukung `--scope` secara dinamis di `winget`) sekaligus mendaftarkan alias perintah `noktah` dan `noktah-hook` secara otomatis.
+
+### Unduh ZIP Manual
+
 Ambil rilis biner siap pakai `noktah-<versi>-win64.zip` dari
 [halaman Releases](https://github.com/AffanShz/noktah/releases), lalu ekstrak dan
 jalankan `noktah-native.exe`.
 
 Paket zip menyertakan:
 - `noktah-native.exe` — biner utama aplikasi (±9 MB).
-- `noktah-hook.exe` — biner pendamping integrasi Claude Code (±150 KB).
+- `noktah-hook.exe` — biner pendamping integrasi agent & Custom Status Tiles (±150 KB).
 - `BACA-DULU.txt` — checksum SHA-256 untuk memverifikasi integritas file.
 
-> **Peringatan SmartScreen?** Klik **More info** → **Run anyway**. Noktah belum memiliki sertifikat tanda tangan digital berbayar, sehingga Windows SmartScreen dapat memunculkan peringatan pada eksekusi pertama.
+Untuk memanggil `noktah-hook` dari terminal mana pun setelah ekstrak manual, aktifkan saklar **Daftarkan noktah-hook ke PATH** di **Setelan → AI → Integrasi Maskot & Agent Hooks (Noki)**.
+
+### Penandatanganan Digital & SmartScreen
+
+Workflow rilis CI mendukung penandatanganan digital otomatis melalui **Azure Trusted Signing** atau sertifikat **PFX Authenticode** (lihat [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md) untuk konfigurasi secrets dan pengajuan manifest `winget-pkgs`).
+
+> **Peringatan SmartScreen pada rilis unsigned?** Klik **More info** → **Run anyway**, dan periksa kesesuaian checksum SHA-256 di `BACA-DULU.txt`.
 
 ## Menjalankan saat Development
 
