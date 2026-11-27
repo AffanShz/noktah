@@ -186,6 +186,7 @@ pub struct Noktah {
     pub last_audio_dev_name: Option<String>,
     pub custom_tiles: noktah_core::TileStore,
     pub(crate) system_tiles_mode: bool,
+    pub(crate) hook_path_cached: Option<bool>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -550,6 +551,7 @@ impl Noktah {
             last_audio_dev_name: None,
             custom_tiles: noktah_core::TileStore::default(),
             system_tiles_mode: false,
+            hook_path_cached: None,
         };
         if let Some(p) = app.resolve_default_page() {
             app.current_page = p;
@@ -667,6 +669,7 @@ impl Noktah {
             last_audio_dev_name: None,
             custom_tiles: noktah_core::TileStore::default(),
             system_tiles_mode: false,
+            hook_path_cached: None,
         };
         if let Some(p) = app.resolve_default_page() {
             app.current_page = p;

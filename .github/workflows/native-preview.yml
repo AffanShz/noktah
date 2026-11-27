@@ -61,18 +61,27 @@ jobs:
           if (-not (Test-Path $hook)) { throw "noktah-hook.exe tidak ditemukan di $hook" }
 
           $f = Get-Item $exe
+          $hf = Get-Item $hook
           $hash = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
+          $hookHash = (Get-FileHash $hook -Algorithm SHA256).Hash.ToLower()
           $ver = $f.VersionInfo
+          $hookVer = $hf.VersionInfo
 
-          Write-Host ("Ukuran    : {0:N2} MB" -f ($f.Length / 1MB))
-          Write-Host ("SHA-256   : {0}" -f $hash)
-          Write-Host ("Produk    : {0}" -f $ver.ProductName)
-          Write-Host ("Versi     : {0}" -f $ver.ProductVersion)
+          Write-Host ("Ukuran         : {0:N2} MB" -f ($f.Length / 1MB))
+          Write-Host ("SHA-256        : {0}" -f $hash)
+          Write-Host ("Produk         : {0}" -f $ver.ProductName)
+          Write-Host ("Versi          : {0}" -f $ver.ProductVersion)
+          Write-Host ("Hook SHA-256   : {0}" -f $hookHash)
+          Write-Host ("Hook Produk    : {0}" -f $hookVer.ProductName)
+          Write-Host ("Hook Versi     : {0}" -f $hookVer.ProductVersion)
 
           # Version info kosong berarti resource gagal ditanam — build seperti
           # itu yang paling sering dituduh virus, jadi jangan diteruskan.
           if ([string]::IsNullOrWhiteSpace($ver.ProductName)) {
-            throw "VERSIONINFO kosong: resource tidak tertanam"
+            throw "VERSIONINFO kosong pada noktah-native.exe: resource tidak tertanam"
+          }
+          if ([string]::IsNullOrWhiteSpace($hookVer.ProductName)) {
+            throw "VERSIONINFO kosong pada noktah-hook.exe: resource tidak tertanam"
           }
 
       - name: Susun paket unduhan

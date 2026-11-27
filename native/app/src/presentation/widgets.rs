@@ -115,8 +115,16 @@ pub fn row_desc(
     theme: &Theme,
     isi: impl FnOnce(&mut egui::Ui),
 ) {
+    let row_id = ui.next_auto_id().with(label);
+    let avail_w = ui.available_width();
+    let cached_ctrl_w = ui.ctx().data(|d| d.get_temp::<f32>(row_id));
+    let reserve_w = cached_ctrl_w.unwrap_or_else(|| (avail_w * 0.45).clamp(36.0, 180.0));
+    let left_max_w = (avail_w - reserve_w - S3).max(80.0);
+
+    let mut ctrl_w = 0.0_f32;
     ui.horizontal(|ui| {
         ui.vertical(|ui| {
+            ui.set_max_width(left_max_w);
             ui.label(style::text(label, theme.ink));
             if !ket.is_empty() {
                 ui.label(style::cap(ket, theme.faint));
@@ -124,8 +132,14 @@ pub fn row_desc(
         });
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             isi(ui);
+            ctrl_w = ui.min_rect().width();
         });
     });
+
+    if ctrl_w > 0.0 && cached_ctrl_w.map(|c| (c - ctrl_w).abs() > 0.5).unwrap_or(true) {
+        ui.ctx().data_mut(|d| d.insert_temp(row_id, ctrl_w));
+        ui.ctx().request_repaint();
+    }
     ui.add_space(S3);
 }
 
