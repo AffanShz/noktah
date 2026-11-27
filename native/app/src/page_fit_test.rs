@@ -11,7 +11,7 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::presentation::{layout, style, widgets};
+    use crate::presentation::{layout, style};
 
     /// Tinggi ruang yang benar-benar tersedia untuk isi halaman.
     ///

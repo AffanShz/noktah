@@ -10,8 +10,8 @@
 use crate::app::{Noktah, SettingsTab};
 use crate::infrastructure::glass;
 use crate::presentation::{icons::Icon, layout, mini, style, widgets};
-use eframe::egui::{self, Color32, Id, Rect, Rounding, Sense, Stroke};
-use noktah_core::lrc;
+use eframe::egui::{self, Color32, Rect, Rounding, Sense, Stroke};
+use noktah_core::{i18n, lrc};
 use std::time::Instant;
 
 impl Noktah {
@@ -94,7 +94,7 @@ impl Noktah {
                     let about_tab = (
                         SettingsTab::About,
                         Icon::About,
-                        "About",
+                        i18n::t(self.lang, "settings.about"),
                         Color32::from_rgb(100, 116, 139),
                     );
                     let (tab_enum, icon, label, badge_bg) = about_tab;
@@ -156,43 +156,43 @@ impl Noktah {
                             (
                                 SettingsTab::General,
                                 Icon::Gear,
-                                "General",
+                                i18n::t(self.lang, "settings.general"),
                                 Color32::from_rgb(113, 113, 122),
                             ),
                             (
                                 SettingsTab::Display,
                                 Icon::Display,
-                                "Display",
+                                i18n::t(self.lang, "settings.display"),
                                 Color32::from_rgb(37, 99, 235),
                             ),
                             (
                                 SettingsTab::Appearance,
                                 Icon::Palette,
-                                "Appearance",
+                                i18n::t(self.lang, "settings.appearance"),
                                 theme.accent,
                             ),
                             (
                                 SettingsTab::Music,
                                 Icon::MusicNote,
-                                "Music and lyrics",
+                                i18n::t(self.lang, "settings.music"),
                                 Color32::from_rgb(244, 63, 94),
                             ),
                             (
                                 SettingsTab::Todo,
                                 Icon::Todo,
-                                "To-do",
+                                i18n::t(self.lang, "settings.todo"),
                                 Color32::from_rgb(34, 197, 94),
                             ),
                             (
                                 SettingsTab::Pomodoro,
                                 Icon::Focus,
-                                "Pomodoro",
+                                i18n::t(self.lang, "settings.pomodoro"),
                                 Color32::from_rgb(249, 115, 22),
                             ),
                             (
                                 SettingsTab::Ai,
                                 Icon::AI,
-                                "AI Assistant",
+                                i18n::t(self.lang, "settings.ai"),
                                 Color32::from_rgb(168, 85, 247),
                             ),
                         ];
@@ -267,16 +267,17 @@ impl Noktah {
                     }),
             )
             .show(ctx, |ui| {
+                let panel_rect = ui.max_rect().intersect(ctx.screen_rect());
                 // Judul Tab di bagian atas konten
                 let tab_title = match self.settings_tab {
-                    SettingsTab::General => "General",
-                    SettingsTab::Display => "Display",
-                    SettingsTab::Appearance => "Appearance",
-                    SettingsTab::Music => "Music and lyrics",
-                    SettingsTab::Todo => "To-do",
-                    SettingsTab::Pomodoro => "Pomodoro",
-                    SettingsTab::Ai => "AI Assistant",
-                    SettingsTab::About => "About",
+                    SettingsTab::General => i18n::t(self.lang, "settings.general"),
+                    SettingsTab::Display => i18n::t(self.lang, "settings.display"),
+                    SettingsTab::Appearance => i18n::t(self.lang, "settings.appearance"),
+                    SettingsTab::Music => i18n::t(self.lang, "settings.music"),
+                    SettingsTab::Todo => i18n::t(self.lang, "settings.todo"),
+                    SettingsTab::Pomodoro => i18n::t(self.lang, "settings.pomodoro"),
+                    SettingsTab::Ai => i18n::t(self.lang, "settings.ai"),
+                    SettingsTab::About => i18n::t(self.lang, "settings.about"),
                 };
 
                 ui.label(
@@ -293,6 +294,94 @@ impl Noktah {
                     .show(ui, |ui| {
                         self.draw_settings_tab_content(ui);
                     });
+
+                // Toast banner mengambang di bagian bawah viewport Settings
+                if let Some((ref text, at)) = self.banner {
+                    let elapsed = at.elapsed().as_secs_f32();
+                    if elapsed < 4.0 {
+                        ctx.request_repaint();
+                        let alpha = if elapsed > 3.5 {
+                            ((4.0 - elapsed) / 0.5).clamp(0.0, 1.0)
+                        } else if elapsed < 0.2 {
+                            (elapsed / 0.2).clamp(0.0, 1.0)
+                        } else {
+                            1.0
+                        };
+
+                        let pad_x = style::S3;
+                        let pad_y = style::S2;
+                        let max_toast_w = (panel_rect.width() - style::S4 * 2.0)
+                            .min(520.0)
+                            .max(panel_rect.width().min(160.0));
+                        let max_text_w = (max_toast_w - pad_x * 2.0).max(80.0);
+
+                        let text_color = theme.ink.gamma_multiply(alpha);
+                        let mut job = egui::text::LayoutJob::single_section(
+                            text.clone(),
+                            egui::TextFormat {
+                                font_id: style::body(),
+                                color: text_color,
+                                ..Default::default()
+                            },
+                        );
+                        job.wrap = egui::text::TextWrapping {
+                            max_width: max_text_w,
+                            max_rows: 4,
+                            break_anywhere: true,
+                            overflow_character: Some('…'),
+                        };
+                        let text_galley = ui.painter().layout_job(job);
+
+                        let min_h = style::S4 + style::S2;
+                        let max_h = (panel_rect.height() - style::S4).max(min_h);
+                        let toast_w = (text_galley.size().x + pad_x * 2.0)
+                            .clamp(140.0_f32.min(max_toast_w), max_toast_w);
+                        let toast_h = (text_galley.size().y + pad_y * 2.0).clamp(min_h, max_h);
+                        let rounding = if text_galley.rows.len() <= 1 {
+                            style::R_PILL
+                        } else {
+                            style::R_GROUP
+                        };
+
+                        let center_x = panel_rect.center().x;
+                        let bottom_y = panel_rect.bottom() - (style::S2 * 2.0);
+                        let raw_rect = Rect::from_center_size(
+                            egui::pos2(center_x, bottom_y - toast_h * 0.5),
+                            egui::vec2(toast_w, toast_h),
+                        );
+                        let min_x = (panel_rect.left() + style::S2)
+                            .min((panel_rect.right() - toast_w).max(panel_rect.left()));
+                        let max_x = (panel_rect.right() - style::S2 - toast_w).max(min_x);
+                        let min_y = (panel_rect.top() + style::S2)
+                            .min((panel_rect.bottom() - toast_h).max(panel_rect.top()));
+                        let max_y = (panel_rect.bottom() - style::S2 - toast_h).max(min_y);
+                        let toast_rect = Rect::from_min_size(
+                            egui::pos2(
+                                raw_rect.left().clamp(min_x, max_x),
+                                raw_rect.top().clamp(min_y, max_y),
+                            ),
+                            egui::vec2(toast_w, toast_h),
+                        );
+
+                        let bg_color =
+                            Color32::from_rgba_unmultiplied(24, 24, 28, (235.0 * alpha) as u8);
+                        let stroke_color = theme.accent.gamma_multiply(0.82 * alpha);
+                        ui.painter().rect(
+                            toast_rect,
+                            Rounding::same(rounding),
+                            bg_color,
+                            Stroke::new(1.0, stroke_color),
+                        );
+                        ui.painter().galley(
+                            egui::pos2(
+                                toast_rect.center().x - text_galley.size().x * 0.5,
+                                toast_rect.center().y - text_galley.size().y * 0.5,
+                            ),
+                            text_galley,
+                            text_color,
+                        );
+                    }
+                }
             });
 
         // Tombol X di titlebar jendela juga menutup, sama seperti Tombol Tutup.
@@ -353,6 +442,7 @@ impl Noktah {
                         glass::textured(
                             painter,
                             outer_rect,
+                            ctx.screen_rect(),
                             radius,
                             tekstur.id(),
                             232,
@@ -374,7 +464,7 @@ impl Noktah {
                 // Telinga selalu ada selama panel menempel di tepi atas.
                 if mix < 0.99 && self.settings.ears {
                     let telinga = layout::EAR * (0.35 + 0.65 * t_w.clamp(0.0, 1.0));
-                    glass::ears(painter, outer_rect, telinga, &self.theme);
+                    glass::ears(painter, outer_rect, telinga, &self.theme, has_blur);
                 }
 
                 // Isi baris minimized hanya terlihat saat hampir tertutup.

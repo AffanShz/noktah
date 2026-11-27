@@ -7,16 +7,9 @@
 
 use eframe::egui;
 
-/// Menangkap area layar dan mengembalikannya sudah dalam keadaan kabur dan berpenyesuaian saturasi.
+/// Menangkap area layar mentah (tanpa blur), diperkecil 1/8 dan di-inpaint jejak pill.
 #[cfg(windows)]
-pub fn capture(
-    x: i32,
-    y: i32,
-    w: i32,
-    h: i32,
-    passes: u8,
-    saturation: f32,
-) -> Option<egui::ColorImage> {
+pub fn capture_raw(x: i32, y: i32, w: i32, h: i32) -> Option<(usize, usize, Vec<u8>)> {
     use windows::Win32::Graphics::Gdi::{
         CreateCompatibleDC, CreateDIBSection, DeleteDC, DeleteObject, GetDC, ReleaseDC,
         SelectObject, SetStretchBltMode, StretchBlt, BITMAPINFO, BITMAPINFOHEADER, BI_RGB,
@@ -97,31 +90,46 @@ pub fn capture(
         }
 
         inpaint_pill_strip(&mut rgba, dw as usize, dh as usize);
-        box_blur(
-            &mut rgba,
-            dw as usize,
-            dh as usize,
-            passes.clamp(1, 5) as usize,
-        );
-        apply_saturation(&mut rgba, saturation);
-
-        Some(egui::ColorImage::from_rgba_unmultiplied(
-            [dw as usize, dh as usize],
-            &rgba,
-        ))
+        Some((dw as usize, dh as usize, rgba))
     }
 }
 
 #[cfg(not(windows))]
-pub fn capture(
-    _x: i32,
-    _y: i32,
-    _w: i32,
-    _h: i32,
-    _passes: u8,
-    _saturation: f32,
-) -> Option<egui::ColorImage> {
+pub fn capture_raw(_x: i32, _y: i32, _w: i32, _h: i32) -> Option<(usize, usize, Vec<u8>)> {
     None
+}
+
+/// Memproses raw RGBA: menjalankan multi-pass box blur dan penyesuaian saturasi warna.
+pub fn process_raw(
+    w: usize,
+    h: usize,
+    raw: &[u8],
+    passes: u8,
+    saturation: f32,
+) -> egui::ColorImage {
+    let mut rgba = raw.to_vec();
+    box_blur(
+        &mut rgba,
+        w,
+        h,
+        passes.clamp(1, 5) as usize,
+    );
+    apply_saturation(&mut rgba, saturation);
+    egui::ColorImage::from_rgba_unmultiplied([w, h], &rgba)
+}
+
+/// Menangkap area layar dan mengembalikannya sudah dalam keadaan kabur dan berpenyesuaian saturasi.
+#[allow(dead_code)]
+pub fn capture(
+    x: i32,
+    y: i32,
+    w: i32,
+    h: i32,
+    passes: u8,
+    saturation: f32,
+) -> Option<egui::ColorImage> {
+    let (dw, dh, raw) = capture_raw(x, y, w, h)?;
+    Some(process_raw(dw, dh, &raw, passes, saturation))
 }
 
 /// Menggantikan area jejak pill di bagian tengah atas dengan sampel piksel dari

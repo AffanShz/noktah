@@ -15,7 +15,8 @@ use std::sync::{Arc, Mutex};
 use windows::Win32::Foundation::{HWND, POINT, RECT};
 #[cfg(windows)]
 use windows::Win32::Graphics::Gdi::{
-    GetMonitorInfoW, MonitorFromPoint, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+    EnumDisplayMonitors, GetMonitorInfoW, MonitorFromPoint, MonitorFromWindow,
+    MONITORINFO, MONITOR_DEFAULTTONEAREST, MONITOR_DEFAULTTOPRIMARY,
 };
 #[cfg(windows)]
 use windows::Win32::UI::HiDpi::{GetDpiForSystem, GetDpiForWindow};
@@ -100,7 +101,7 @@ pub fn ensure_alpha_visible(hwnd: HWND) {
         };
         let _ = DwmEnableBlurBehindWindow(hwnd, &bb);
         if !region.is_invalid() {
-            DeleteObject(region);
+            let _ = DeleteObject(region);
         }
     }
 }
@@ -267,6 +268,37 @@ pub fn initial_position() -> f32 {
 #[cfg(not(windows))]
 pub fn initial_position() -> f32 {
     0.0
+}
+
+#[cfg(windows)]
+pub fn primary_monitor() -> windows::Win32::Graphics::Gdi::HMONITOR {
+    unsafe {
+        MonitorFromPoint(POINT { x: 0, y: 0 }, MONITOR_DEFAULTTOPRIMARY)
+    }
+}
+
+#[cfg(windows)]
+pub fn monitor_by_index(target_idx: usize) -> Option<windows::Win32::Graphics::Gdi::HMONITOR> {
+    unsafe {
+        let mut monitors: Vec<windows::Win32::Graphics::Gdi::HMONITOR> = Vec::new();
+        unsafe extern "system" fn callback(
+            hmonitor: windows::Win32::Graphics::Gdi::HMONITOR,
+            _hdc: windows::Win32::Graphics::Gdi::HDC,
+            _rect: *mut RECT,
+            lparam: windows::Win32::Foundation::LPARAM,
+        ) -> windows::Win32::Foundation::BOOL {
+            let list = &mut *(lparam.0 as *mut Vec<windows::Win32::Graphics::Gdi::HMONITOR>);
+            list.push(hmonitor);
+            windows::Win32::Foundation::BOOL::from(true)
+        }
+        let _ = EnumDisplayMonitors(
+            None,
+            None,
+            Some(callback),
+            windows::Win32::Foundation::LPARAM(&mut monitors as *mut _ as isize),
+        );
+        monitors.get(target_idx).copied()
+    }
 }
 
 #[cfg(windows)]
@@ -540,6 +572,7 @@ pub fn spawn_watcher(ctx: Context, minimal: bool) -> Arc<Hover> {
                 let mut hwnd: Option<HWND> = None;
                 let mut last_width: Option<i32> = None;
                 let mut last_monitor_h: Option<isize> = None;
+                let mut last_mode: u32 = hover_thread.monitor_mode.load(Ordering::Relaxed);
                 let mut fs_check_count: u32 = 0;
 
             loop {
@@ -593,7 +626,7 @@ pub fn spawn_watcher(ctx: Context, minimal: bool) -> Arc<Hover> {
                 // Penyembuh diri: pastikan DWM masih mengomposit alpha per
                 // piksel. Dijeda internal (500 ms), jadi aman dipanggil tiap
                 // putaran walau pemantau berjalan 16 ms saat morph.
-                unsafe { ensure_alpha_visible(h) };
+                ensure_alpha_visible(h);
 
                 let mut point = POINT::default();
                 if unsafe { GetCursorPos(&mut point) }.is_err() {
@@ -612,7 +645,16 @@ pub fn spawn_watcher(ctx: Context, minimal: bool) -> Arc<Hover> {
 
                 // Cek penempatan monitor dinamis
                 let mode = hover_thread.monitor_mode.load(Ordering::Relaxed);
-                if mode == 1 {
+                if mode == 0 {
+                    // Mode Layar Utama (Primary)
+                    if last_mode != mode || last_monitor_h.is_none() {
+                        let target_mon = primary_monitor();
+                        center_window_on_monitor(h, target_mon);
+                        force_alpha_visible(h);
+                        ctx.request_repaint();
+                        last_monitor_h = Some(target_mon.0 as isize);
+                    }
+                } else if mode == 1 {
                     // Mode Ikuti Kursor: pindahkan jendela ke monitor tempat kursor berada
                     let cursor_mon = unsafe { MonitorFromPoint(point, MONITOR_DEFAULTTONEAREST) };
                     if last_monitor_h != Some(cursor_mon.0 as isize) {
@@ -621,7 +663,18 @@ pub fn spawn_watcher(ctx: Context, minimal: bool) -> Arc<Hover> {
                         force_alpha_visible(h);
                         ctx.request_repaint();
                     }
+                } else {
+                    // Mode Index (mode >= 2): index monitor tetap (mode - 2)
+                    let idx = (mode - 2) as usize;
+                    let target_mon = monitor_by_index(idx).unwrap_or_else(primary_monitor);
+                    if last_mode != mode || last_monitor_h != Some(target_mon.0 as isize) {
+                        last_monitor_h = Some(target_mon.0 as isize);
+                        center_window_on_monitor(h, target_mon);
+                        force_alpha_visible(h);
+                        ctx.request_repaint();
+                    }
                 }
+                last_mode = mode;
 
                 // Koordinat lokal dari rect sebenarnya, bukan dari posisi yang
                 // kita minta — supaya tidak meleset saat DPI berubah.

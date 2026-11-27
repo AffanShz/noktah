@@ -182,7 +182,7 @@ OPSI:
 
 CONTOH PENGGUNAAN:
     noktah-hook working "cargo test"
-    noktah-hook done "Seluruh 169 unit test lulus"
+    noktah-hook done "Seluruh unit test lulus"
     noktah-hook error "Kompilasi gagal di main.rs"
     noktah-hook idle
     noktah-hook tile cpu "85%" "High load" --tone warning
@@ -231,6 +231,7 @@ pub fn build_payload_from_args(
 
     let mut options_tile_id: Option<String> = None;
     let mut options_tile_title: Option<String> = None;
+    let mut options_tile_title_explicit: Option<String> = None;
     let mut options_tile_value: Option<String> = None;
     let mut options_tile_subtitle: Option<String> = None;
     let mut options_tile_tone: Option<String> = None;
@@ -283,7 +284,9 @@ pub fn build_payload_from_args(
             }
             "--title" => {
                 if i + 1 < actual_args.len() {
-                    options_title = Some(actual_args[i + 1].clone());
+                    let val = actual_args[i + 1].clone();
+                    options_title = Some(val.clone());
+                    options_tile_title_explicit = Some(val);
                     i += 1;
                 }
             }
@@ -454,7 +457,7 @@ pub fn build_payload_from_args(
         if let Some(id) = options_tile_id {
             obj.insert("tile_id".to_string(), serde_json::Value::String(id));
         }
-        if let Some(title) = options_tile_title {
+        if let Some(title) = options_tile_title_explicit.or(options_tile_title) {
             obj.insert("tile_title".to_string(), serde_json::Value::String(title));
         }
         if let Some(val) = options_tile_value {
@@ -482,6 +485,7 @@ pub fn build_payload_from_args(
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
+    let cli_args = if args.len() > 1 { &args[1..] } else { &[] };
     let is_stdin_piped = !stdin().is_terminal();
     let stdin_payload: serde_json::Value = if is_stdin_piped {
         let mut stdin_bytes = Vec::new();
@@ -495,7 +499,7 @@ fn main() {
         serde_json::json!({})
     };
 
-    let payload = match build_payload_from_args(&args, stdin_payload) {
+    let payload = match build_payload_from_args(cli_args, stdin_payload) {
         Some(p) => p,
         None => {
             print_help();
@@ -679,5 +683,22 @@ mod tests {
         assert_eq!(p["tile_id"], "override_id");
         assert_eq!(p["tile"]["id"], "inner");
         assert_eq!(p["session_title"], "demo");
+    }
+
+    #[test]
+    fn title_override_with_positional_tile() {
+        let args = vec![
+            "tile".into(),
+            "cpu".into(),
+            "50%".into(),
+            "--title".into(),
+            "CPU Load".into(),
+        ];
+        let p = build_payload_from_args(&args, serde_json::json!({})).unwrap();
+        assert_eq!(p["hook_event_name"], "tile");
+        assert_eq!(p["tile_id"], "cpu");
+        assert_eq!(p["tile_value"], "50%");
+        assert_eq!(p["tile_title"], "CPU Load");
+        assert_eq!(p["session_title"], "CPU Load");
     }
 }

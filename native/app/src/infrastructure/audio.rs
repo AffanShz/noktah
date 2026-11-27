@@ -28,6 +28,15 @@ pub struct AudioHandle {
 }
 
 impl AudioHandle {
+    #[cfg(test)]
+    pub fn dummy() -> Self {
+        let (_, rx) = channel();
+        Self {
+            rx,
+            active: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
     /// Dipanggil setiap frame dari UI.
     pub fn set_active(&self, on: bool) {
         self.active.store(on, Ordering::Relaxed);

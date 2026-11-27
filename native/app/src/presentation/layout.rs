@@ -17,8 +17,10 @@ pub const EAR: f32 = 28.0;
 ///
 /// Noktah tetap notch, jadi lebar ini adalah lebar notch saat tertutup —
 /// menempel di tepi atas dengan telinga cair, bukan pulau menggantung.
+#[allow(dead_code)]
 pub const PILL_W: f32 = 260.0;
 /// Lebar pil saat memutar lagu (`.island[data-live="1"]` `--cw:390px`).
+#[allow(dead_code)]
 pub const PILL_W_LIVE: f32 = 390.0;
 /// Tinggi pil (`.island` `height:38px`).
 pub const PILL_H: f32 = 38.0;
@@ -62,6 +64,7 @@ pub const DOCK_STRIP_H: f32 = 16.0;
 /// Tambahan tinggi ke bawah saat dock di-hover untuk menampilkan deretan menu tab (46 px).
 pub const DOCK_MENU_H: f32 = 46.0;
 /// Tinggi total dock saat dibuka penuh.
+#[allow(dead_code)]
 pub const DOCK_H: f32 = DOCK_STRIP_H + DOCK_MENU_H;
 /// Tinggi shell terluar saat menu dock terbuka penuh (148 + 46 = 194 px).
 pub const OUTER_OPEN_H: f32 = OPEN_H + DOCK_MENU_H;
@@ -79,6 +82,7 @@ pub const fn dock_group_w(n: usize) -> f32 {
     DOCK_TAB_W * n as f32 + DOCK_PAD
 }
 /// Lebar strip saat menganggur — tiga garis, bukan selebar isinya.
+#[allow(dead_code)]
 pub const DOCK_STRIP_W: f32 = 38.0;
 /// Berapa lama dock bertahan terbuka setelah kursor terakhir terlihat di
 /// daerahnya. Menutup jendela kecil antara strip dan ikon yang bergerak.
@@ -167,6 +171,7 @@ pub fn dock_hover_zone(base: Rect, dock_open: f32) -> Rect {
 }
 
 /// Pita tipis di dasar panel yang membuka dock saat kursor menyentuhnya.
+#[allow(dead_code)]
 pub fn strip_band(area: Rect) -> Rect {
     Rect::from_min_max(
         pos2(area.left(), area.bottom() - DOCK_STRIP_H),

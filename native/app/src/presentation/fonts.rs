@@ -14,6 +14,7 @@ use eframe::egui;
 pub const FAMILY_SKYNIGHT: &str = "skynight";
 pub const FAMILY_SEMIBOLD: &str = "jakarta-semibold";
 pub const FAMILY_BOLD: &str = "jakarta-bold";
+#[allow(dead_code)]
 pub const FAMILY_JAPANESE: &str = "mplus-rounded";
 
 pub fn install(ctx: &egui::Context) {
@@ -128,6 +129,7 @@ pub fn install(ctx: &egui::Context) {
 }
 
 /// Teks Skynight untuk judul dan tampilan.
+#[allow(dead_code)]
 pub fn skynight(text: impl Into<String>, size: f32) -> egui::RichText {
     egui::RichText::new(text)
         .size(size)
@@ -135,6 +137,7 @@ pub fn skynight(text: impl Into<String>, size: f32) -> egui::RichText {
 }
 
 /// Teks semi-tebal.
+#[allow(dead_code)]
 pub fn semibold(text: impl Into<String>, size: f32) -> egui::RichText {
     egui::RichText::new(text)
         .size(size)
@@ -142,6 +145,7 @@ pub fn semibold(text: impl Into<String>, size: f32) -> egui::RichText {
 }
 
 /// Teks tebal.
+#[allow(dead_code)]
 pub fn bold(text: impl Into<String>, size: f32) -> egui::RichText {
     egui::RichText::new(text)
         .size(size)
@@ -149,6 +153,7 @@ pub fn bold(text: impl Into<String>, size: f32) -> egui::RichText {
 }
 
 /// Angka monospace, untuk jam dan hitungan waktu.
+#[allow(dead_code)]
 pub fn mono(text: impl Into<String>, size: f32) -> egui::RichText {
     egui::RichText::new(text)
         .size(size)

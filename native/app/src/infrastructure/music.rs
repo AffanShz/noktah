@@ -29,6 +29,15 @@ pub struct MusicHandle {
     pub tx: Sender<Cmd>,
 }
 
+impl MusicHandle {
+    #[cfg(test)]
+    pub fn dummy() -> Self {
+        let (_, rx) = channel();
+        let (tx, _) = channel();
+        Self { rx, tx }
+    }
+}
+
 pub fn spawn(ctx: egui::Context) -> MusicHandle {
     let (tx_update, rx_update) = channel();
     let (tx_cmd, rx_cmd) = channel();
@@ -65,7 +74,7 @@ fn run(ctx: egui::Context, tx: Sender<Update>, rx: Receiver<Cmd>) {
     let mut last_art_for = String::new();
     // Membuat manager SMTC setiap 250 ms itu mahal: tiap panggilan melakukan
     // aktivasi WinRT penuh. Dibuat sekali, dipakai ulang.
-    let mut manager = unsafe { Manager::RequestAsync().ok().and_then(|op| op.get().ok()) };
+    let mut manager = Manager::RequestAsync().ok().and_then(|op| op.get().ok());
     let mut gagal = 0u32;
 
     loop {
@@ -85,7 +94,7 @@ fn run(ctx: egui::Context, tx: Sender<Update>, rx: Receiver<Cmd>) {
             gagal += 1;
             if gagal >= 20 {
                 gagal = 0;
-                manager = unsafe { Manager::RequestAsync().ok().and_then(|op| op.get().ok()) };
+                manager = Manager::RequestAsync().ok().and_then(|op| op.get().ok());
             }
         } else {
             gagal = 0;

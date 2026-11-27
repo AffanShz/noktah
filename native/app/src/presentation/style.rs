@@ -33,9 +33,11 @@ pub const S4: f32 = 24.0;
 
 /// Padding tepi panel. Satu angka untuk kiri dan kanan — dulu kiri 24 dan
 /// kanan 18, dan itu yang membuat isi panel terlihat miring.
+#[allow(dead_code)]
 pub const PAD: f32 = S4;
 
 /// Padding di dalam kartu. Radius dalam = radius luar − nilai ini.
+#[allow(dead_code)]
 pub const CARD_PAD: f32 = S3;
 
 /* --------------------------------------------------------------- radius */
@@ -48,6 +50,7 @@ pub const R_CARD: f32 = 20.0;
 /// Grup dan kartu setelan (`.group` 14 px).
 pub const R_GROUP: f32 = 14.0;
 /// Sampul album (`.art` 16 px).
+#[allow(dead_code)]
 pub const R_ART: f32 = 16.0;
 /// Kontrol: chip, tab, kotak input (`.field` 14 px).
 pub const R_CONTROL: f32 = 14.0;
@@ -58,6 +61,7 @@ pub const R_PILL: f32 = 999.0;
 
 /// Radius dalam untuk elemen yang bersarang di dalam `outer` dengan padding
 /// `pad`. Menjaga lengkung tetap sepusat, seperti sudut bertingkat di iOS.
+#[allow(dead_code)]
 pub fn concentric(outer: f32, pad: f32) -> f32 {
     (outer - pad).max(0.0)
 }
@@ -65,8 +69,10 @@ pub fn concentric(outer: f32, pad: f32) -> f32 {
 /* ----------------------------------------------------------------- tipe */
 
 /// Angka raksasa: suhu cuaca (`.temp` 36 px di prototipe kompak).
+#[allow(dead_code)]
 pub const T_DISPLAY_LG: f32 = 36.0;
 /// Jam besar dan angka utama panel.
+#[allow(dead_code)]
 pub const T_DISPLAY: f32 = 26.0;
 /// Angka metrik kartu (`.tv` 24 px).
 pub const T_STAT: f32 = 24.0;
@@ -94,6 +100,7 @@ pub fn caption() -> FontId {
 }
 
 /// Huruf mikro untuk metadata kecil (timer, label status).
+#[allow(dead_code)]
 pub fn micro() -> FontId {
     FontId::proportional(T_MICRO)
 }
@@ -109,6 +116,7 @@ pub fn cap(s: impl Into<String>, color: Color32) -> egui::RichText {
 }
 
 /// Mikro teks dengan warna tertentu.
+#[allow(dead_code)]
 pub fn micro_text(s: impl Into<String>, color: Color32) -> egui::RichText {
     egui::RichText::new(s).size(T_MICRO).color(color)
 }
@@ -134,16 +142,19 @@ pub fn micro_mono(s: impl Into<String>, color: Color32) -> egui::RichText {
 }
 
 /// Angka besar untuk metrik dan hitungan: 28 px, tebal, tabular.
+#[allow(dead_code)]
 pub fn stat_value(s: impl Into<String>, color: Color32) -> egui::RichText {
     egui::RichText::new(s).size(T_STAT).strong().color(color)
 }
 
 /// Angka raksasa untuk suhu cuaca (`.temp` 42 px).
+#[allow(dead_code)]
 pub fn display_value(s: impl Into<String>, color: Color32) -> egui::RichText {
     egui::RichText::new(s).size(T_DISPLAY_LG).strong().color(color)
 }
 
 /// Label kolom kartu (`.tl` 12 px, label2).
+#[allow(dead_code)]
 pub fn tile_label(s: impl Into<String>, color: Color32) -> egui::RichText {
     egui::RichText::new(s).size(T_CAPTION).color(color)
 }
@@ -153,18 +164,21 @@ pub fn tile_label(s: impl Into<String>, color: Color32) -> egui::RichText {
 /// Dulu memakai HURUF KAPITAL SEMUA dengan ukuran 9,5. Kapital semua
 /// memperlambat membaca dan membuat setiap judul terlihat sama pentingnya
 /// dengan isinya. Sekarang: huruf biasa, lebih tebal, warna redup.
+#[allow(dead_code)]
 pub fn heading(s: impl Into<String>, color: Color32) -> egui::RichText {
     egui::RichText::new(s).size(T_BODY).strong().color(color)
 }
 
 /// Title untuk header halaman notch — huruf biasa, tidak kapital, lebih
 /// ringan dibanding heading bagian setelan agar tidak bersaing dengan judul.
+#[allow(dead_code)]
 pub fn page_title(s: impl Into<String>, color: Color32) -> egui::RichText {
     egui::RichText::new(s).size(T_TITLE).strong().color(color)
 }
 
 /// Headline untuk kartu dan surface utama — dipakai di halaman Water, Focus,
 /// System sebagai "satu angka yang jadi alasan halaman ini ada".
+#[allow(dead_code)]
 pub fn card_headline(s: impl Into<String>, color: Color32) -> egui::RichText {
     egui::RichText::new(s).size(T_DISPLAY).strong().color(color)
 }
@@ -172,6 +186,7 @@ pub fn card_headline(s: impl Into<String>, color: Color32) -> egui::RichText {
 /* --------------------------------------------------------------- helpers */
 
 /// Align Y ke baseline rata tengah (slot_height - item_height) / 2.0
+#[allow(dead_code)]
 pub fn center_baseline(slot_height: f32, item_height: f32) -> f32 {
     (slot_height - item_height) * 0.5
 }

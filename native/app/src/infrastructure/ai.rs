@@ -27,6 +27,15 @@ pub struct AiHandle {
     pub tx: Sender<AiRequest>,
 }
 
+impl AiHandle {
+    #[cfg(test)]
+    pub fn dummy() -> Self {
+        let (_, rx) = channel();
+        let (tx, _) = channel();
+        Self { rx, tx }
+    }
+}
+
 pub fn spawn(ctx: egui::Context) -> AiHandle {
     let (tx_event, rx_event) = channel();
     let (tx_req, rx_req) = channel::<AiRequest>();

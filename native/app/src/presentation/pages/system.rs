@@ -22,21 +22,40 @@ impl Noktah {
         let mut clear_tiles = false;
         let show_switcher = self.settings.custom_tiles_enabled && !self.custom_tiles.is_empty();
 
+        let lbl_metrics = self.tr("system.view_metrics").to_string();
+        let lbl_tiles = format!("{} ({})", self.tr("system.view_tiles"), self.custom_tiles.len());
+        let lbl_clear = self.tr("system.tiles_clear").to_string();
+
         let header_h = widgets::page_header(ui, "SYSTEM", &theme, |ui| {
             if show_switcher {
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 4.0;
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    ui.spacing_mut().item_spacing.x = style::S1;
+                    let pad_x = ui.spacing().button_padding.x * 2.0;
+                    let chip_w = |text: &str| {
+                        ui.painter()
+                            .layout_no_wrap(text.to_owned(), style::body(), theme.ink)
+                            .size()
+                            .x
+                            + pad_x
+                    };
+                    let mut total_w = chip_w(&lbl_metrics) + style::S1 + chip_w(&lbl_tiles);
                     if self.system_tiles_mode {
-                        if widgets::chip_button(ui, self.tr("system.tiles_clear"), false, &theme) {
-                            clear_tiles = true;
-                        }
+                        total_w += style::S1 + chip_w(&lbl_clear);
                     }
-                    let lbl_tiles = format!("{} ({})", self.tr("system.view_tiles"), self.custom_tiles.len());
+                    let leading = (ui.available_width() - total_w).max(0.0);
+                    if leading > 0.0 {
+                        ui.add_space(leading);
+                    }
+                    if widgets::chip_button(ui, &lbl_metrics, !self.system_tiles_mode, &theme) {
+                        new_tiles_mode = false;
+                    }
                     if widgets::chip_button(ui, &lbl_tiles, self.system_tiles_mode, &theme) {
                         new_tiles_mode = true;
                     }
-                    if widgets::chip_button(ui, self.tr("system.view_metrics"), !self.system_tiles_mode, &theme) {
-                        new_tiles_mode = false;
+                    if self.system_tiles_mode {
+                        if widgets::chip_button(ui, &lbl_clear, false, &theme) {
+                            clear_tiles = true;
+                        }
                     }
                 });
             }
@@ -92,7 +111,7 @@ impl Noktah {
                 let title_galley = ui.painter().layout_no_wrap(tile.title.clone(), style::caption(), theme.dim);
                 ui.painter().with_clip_rect(title_rect).galley(title_rect.min, title_galley, theme.dim);
 
-                let val_font = egui::FontId::proportional(if tile.value.len() > 10 { 14.0 } else { 16.5 });
+                let val_font = egui::FontId::proportional(if tile.value.chars().count() > 10 { 14.0 } else { 16.5 });
                 let val_rect = Rect::from_min_max(
                     egui::pos2(card_rect.left() + pad, card_rect.top() + pad + 14.0),
                     egui::pos2(card_rect.right() - pad, card_rect.bottom() - pad - 12.0),
@@ -298,5 +317,113 @@ impl Noktah {
                 ui.label(style::cap(renderer, theme.faint));
             });
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::infrastructure::platform::Hover;
+    use crate::presentation::layout;
+    use noktah_core::tile::{CustomTile, TileTone};
+    use noktah_core::Lang;
+
+    #[test]
+    fn system_header_switcher_buttons_are_left_to_right_ordered() {
+        let ctx = egui::Context::default();
+        let hover = Hover::new(false);
+        let mut app = Noktah::new_for_test("test".to_string(), hover, &ctx);
+        app.lang = Lang::En;
+        app.settings.language = Lang::En;
+        app.settings.custom_tiles_enabled = true;
+        app.system_tiles_mode = true;
+        app.custom_tiles.upsert(
+            CustomTile {
+                id: "t1".into(),
+                title: "Build".into(),
+                value: "OK".into(),
+                tone: TileTone::Success,
+                ..Default::default()
+            },
+            1_000,
+        );
+
+        let area = Rect::from_min_size(
+            egui::pos2(0.0, 0.0),
+            egui::vec2(layout::OPEN_W, layout::OPEN_H),
+        );
+        let content_rect = layout::content_rect(area, 16.0, style::S2);
+
+        let output = ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let mut page_ui = ui.new_child(
+                    egui::UiBuilder::new()
+                        .max_rect(content_rect)
+                        .layout(egui::Layout::top_down(egui::Align::LEFT)),
+                );
+                page_ui.set_clip_rect(content_rect);
+                app.draw_page_system(&mut page_ui, content_rect);
+            });
+        });
+
+        let mut text_positions: Vec<(String, Rect)> = Vec::new();
+        let mut rect_shapes: Vec<Rect> = Vec::new();
+
+        fn collect_shapes(
+            shape: &egui::epaint::Shape,
+            text_positions: &mut Vec<(String, Rect)>,
+            rect_shapes: &mut Vec<Rect>,
+        ) {
+            match shape {
+                egui::epaint::Shape::Text(t) => {
+                    text_positions.push((t.galley.text().to_owned(), t.visual_bounding_rect()));
+                }
+                egui::epaint::Shape::Rect(r) => {
+                    rect_shapes.push(r.rect);
+                }
+                egui::epaint::Shape::Vec(v) => {
+                    for s in v {
+                        collect_shapes(s, text_positions, rect_shapes);
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        for cs in &output.shapes {
+            collect_shapes(&cs.shape, &mut text_positions, &mut rect_shapes);
+        }
+
+        let button_rect_for = |label: &str| -> Rect {
+            let text_rect = text_positions
+                .iter()
+                .find(|(t, _)| t == label)
+                .map(|(_, r)| *r)
+                .unwrap_or_else(|| panic!("missing button label '{label}' in {text_positions:?}"));
+            rect_shapes
+                .iter()
+                .copied()
+                .filter(|r| r.contains(text_rect.center()) && r.width() < 200.0 && r.height() < 40.0)
+                .min_by(|a, b| a.width().total_cmp(&b.width()))
+                .unwrap_or(text_rect)
+        };
+
+        let system_btn = button_rect_for("System");
+        let tiles_btn = button_rect_for("Tiles (1)");
+        let clear_btn = button_rect_for("Clear");
+
+        assert!(
+            system_btn.min.x < tiles_btn.min.x && tiles_btn.min.x < clear_btn.min.x,
+            "expected System < Tiles (1) < Clear, got system={:?}, tiles={:?}, clear={:?}",
+            system_btn.min.x,
+            tiles_btn.min.x,
+            clear_btn.min.x
+        );
+        assert!(
+            clear_btn.max.x <= content_rect.right() + 0.5,
+            "Clear button overflows right edge: {} > {}",
+            clear_btn.max.x,
+            content_rect.right()
+        );
     }
 }

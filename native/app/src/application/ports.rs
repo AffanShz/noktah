@@ -13,6 +13,7 @@ use noktah_core::model::{ChatMessage, MediaState, PomodoroState, Todo};
 ///
 /// Dibuat trait, bukan fungsi bebas, supaya test bisa memakai penyimpanan
 /// di memori dan memeriksa apa yang ditulis tanpa menyentuh disk pengguna.
+#[allow(dead_code)]
 pub trait Store {
     fn load<T>(&self, name: &str) -> T
     where
@@ -34,6 +35,7 @@ pub trait Store {
 /// Terpisah dari [`Store`] karena tingkat bahayanya berbeda: ini rahasia,
 /// bukan sekadar preferensi. Memisahkannya membuat permukaan "tulis rahasia"
 /// kecil dan mudah diaudit.
+#[allow(dead_code)]
 pub trait SecretStore {
     fn load(&self) -> String;
     fn save(&self, value: &str) -> Result<(), String>;
@@ -46,6 +48,7 @@ pub trait SecretStore {
 /// Pemanggil tidak perlu tahu ini ureq, reqwest, atau mock. Mengembalikan
 /// `None`/`Err` yang sudah berbentuk teks siap tampil, karena use case tidak
 /// punya urusan menerjemahkan kode status HTTP.
+#[allow(dead_code)]
 pub trait Network {
     /// Cuaca sekarang untuk sebuah kota.
     fn weather(&self, city: &str) -> Option<noktah_core::model::WeatherNow>;
@@ -69,12 +72,14 @@ pub trait Network {
 }
 
 /// Lirik hasil pencarian, sudah dalam bentuk domain.
+#[allow(dead_code)]
 #[derive(Clone, Debug, Default)]
 pub struct LyricsDoc {
     pub synced: Vec<noktah_core::lrc::LrcLine>,
     pub plain: String,
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct ChatRequest {
     pub base_url: String,
@@ -89,6 +94,7 @@ pub struct ChatRequest {
 ///
 /// Setiap method di sini punya implementasi no-op di luar Windows, sehingga
 /// use case tetap bisa dikompilasi dan diuji di mesin apa pun.
+#[allow(dead_code)]
 pub trait SystemInfo {
     /// (sedang mengisi daya, persentase baterai)
     fn power(&self) -> (bool, u8);
@@ -99,6 +105,7 @@ pub trait SystemInfo {
 }
 
 /// Sisi efek samping dari preferensi pengguna.
+#[allow(dead_code)]
 pub trait SystemActions {
     fn set_autostart(&self, enabled: bool) -> Result<(), String>;
     fn autostart_enabled(&self) -> bool;
@@ -109,11 +116,13 @@ pub trait SystemActions {
 /* --------------------------------------------------------- sumber media (SMTC) */
 
 /// Keadaan pemutar musik yang sedang aktif di sistem.
+#[allow(dead_code)]
 pub trait MediaSource {
     /// Coba baca keadaan sekarang. `None` = tidak ada sesi media.
     fn snapshot(&self) -> Option<MediaSnapshot>;
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Debug, Default)]
 pub struct MediaSnapshot {
     pub state: MediaState,
@@ -126,6 +135,7 @@ pub struct MediaSnapshot {
 /* ----------------------------------------------------------------- waktu */
 
 /// Sumber waktu, dibungkus supaya test bisa mengendalikannya.
+#[allow(dead_code)]
 pub trait Clock {
     fn now_ms(&self) -> i64;
     fn now_local_hour(&self) -> u32;
@@ -138,6 +148,7 @@ pub trait Clock {
 /// Ini memaksa setiap use case menyatakan kebutuhannya di tanda tangan —
 /// kalau sebuah use case tiba-tiba butuh jaringan, itu terlihat di sini,
 /// bukan tersembunyi di dalam pemanggilan langsung.
+#[allow(dead_code)]
 pub trait Deps {
     type Store: Store;
     type Secret: SecretStore;
@@ -161,6 +172,7 @@ pub trait Deps {
 /// Nama berkas data. Dikumpulkan di sini supaya tidak ada string ajaib
 /// tersebar di seluruh kode — satu salah ketik di sini akan diam-diam
 /// membuat berkas kedua.
+#[allow(dead_code)]
 pub mod files {
     pub const SETTINGS: &str = "settings.json";
     pub const TASKS: &str = "tasks.json";
@@ -170,6 +182,7 @@ pub mod files {
 
 /// Bentuk data yang disimpan, dikumpulkan supaya adapter penyimpanan tidak
 /// perlu tahu tipe konkret satu per satu.
+#[allow(dead_code)]
 #[derive(Default, Clone, Debug)]
 pub struct Persisted {
     pub settings: noktah_core::Settings,

@@ -53,7 +53,7 @@ impl Default for ThemePreset {
 pub fn parse_hex_rgb(raw: &str) -> Option<[u8; 3]> {
     let s = raw.trim();
     let s = s.strip_prefix('#').unwrap_or(s);
-    if s.len() != 6 || !s.is_ascii() {
+    if s.len() != 6 || !s.bytes().all(|b| b.is_ascii_hexdigit()) {
         return None;
     }
     let r = u8::from_str_radix(&s[0..2], 16).ok()?;
@@ -229,7 +229,7 @@ impl ThemePreset {
         let trimmed_name = self.name.trim();
         if trimmed_name.is_empty() {
             self.name = "Custom".to_string();
-        } else if trimmed_name.len() > 40 {
+        } else if trimmed_name.chars().count() > 40 {
             self.name = trimmed_name.chars().take(40).collect();
         } else {
             self.name = trimmed_name.to_string();
@@ -276,8 +276,31 @@ impl ThemePreset {
         if raw.len() > 32 * 1024 {
             return Err("Preset payload exceeds 32 KB limit".into());
         }
-        let mut preset: ThemePreset =
+        let val: serde_json::Value =
             serde_json::from_str(raw).map_err(|e| format!("Invalid JSON: {e}"))?;
+        let obj = val
+            .as_object()
+            .ok_or_else(|| "Preset JSON must be an object".to_string())?;
+
+        const RECOGNIZED_KEYS: &[&str] = &[
+            "schema_version",
+            "accent",
+            "custom_accent_hex",
+            "glass_effect",
+            "opacity",
+            "glass_tint_rgb",
+            "glass_specular",
+            "glass_blur_radius",
+            "glass_saturation",
+        ];
+
+        let has_recognized_key = obj.keys().any(|k| RECOGNIZED_KEYS.contains(&k.as_str()));
+        if !has_recognized_key {
+            return Err("Preset JSON does not contain any recognized theme preset keys".into());
+        }
+
+        let mut preset: ThemePreset =
+            serde_json::from_value(val).map_err(|e| format!("Invalid preset structure: {e}"))?;
         preset.sanitize();
         Ok(preset)
     }
@@ -298,6 +321,9 @@ mod tests {
         assert_eq!(parse_hex_rgb("#12345"), None);
         assert_eq!(parse_hex_rgb("#1234567"), None);
         assert_eq!(parse_hex_rgb("#GGGGGG"), None);
+        assert_eq!(parse_hex_rgb("#+1+2+3"), None);
+        assert_eq!(parse_hex_rgb("+#1+2+3"), None);
+        assert_eq!(parse_hex_rgb("+1+2+3"), None);
     }
 
     #[test]
@@ -356,6 +382,11 @@ mod tests {
 
         let huge = " ".repeat(33 * 1024);
         assert!(ThemePreset::from_json_str(&huge).is_err());
+
+        // Reject empty objects or arbitrary non-preset JSON
+        assert!(ThemePreset::from_json_str("{}").is_err());
+        assert!(ThemePreset::from_json_str(r#"{"hello": "world"}"#).is_err());
+        assert!(ThemePreset::from_json_str(r#"{"foo": 123, "bar": false}"#).is_err());
     }
 
     #[test]

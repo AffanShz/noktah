@@ -13,6 +13,15 @@ pub struct WeatherHandle {
     pub tx: Sender<String>,
 }
 
+impl WeatherHandle {
+    #[cfg(test)]
+    pub fn dummy() -> Self {
+        let (_, rx) = channel();
+        let (tx, _) = channel();
+        Self { rx, tx }
+    }
+}
+
 pub fn spawn(ctx: egui::Context) -> WeatherHandle {
     let (tx_out, rx_out) = channel();
     let (tx_req, rx_req) = channel::<String>();

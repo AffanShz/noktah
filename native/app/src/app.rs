@@ -16,7 +16,6 @@ use crate::infrastructure::store;
 use crate::infrastructure::sys::SysSampler;
 use crate::infrastructure::weather::{self, WeatherHandle};
 use crate::presentation::icons;
-use crate::presentation::layout;
 use crate::presentation::spring::*;
 use crate::presentation::theme::Theme;
 use eframe::egui;
@@ -118,7 +117,9 @@ pub struct Noktah {
     /// keluhan #1 pengguna aplikasi notch adalah expand tidak sengaja.
     pub(crate) hover_since: Option<Instant>,
     pub(crate) glass_tex: Option<egui::TextureHandle>,
+    pub(crate) glass_raw_capture: Option<(usize, usize, Vec<u8>)>,
     pub(crate) glass_dirty: bool,
+    pub(crate) custom_accent_input: String,
     /// Kapan pengguna terakhir menggeser atau memilih lirik.
     pub lyric_manual_at: Instant,
     pub album_accent: Option<egui::Color32>,
@@ -177,6 +178,8 @@ pub struct Noktah {
     pub pending_permissions: VecDeque<QueuedPermission>,
     pub ipc: crate::infrastructure::ipc::IpcHandle,
     pub calendar_events: Vec<noktah_core::CalendarEvent>,
+    pub calendar_error: Option<String>,
+    pub(crate) calendar_path: String,
     pub last_calendar_check: Instant,
     pub file_shelf: Vec<crate::presentation::widgets::ShelfFile>,
     pub last_audio_dev_check: Instant,
@@ -362,6 +365,60 @@ impl Noktah {
             self.close_panel();
         }
     }
+    /// Menerapkan setelan hasil impor dan menyinkronkan buffer editor UI.
+    pub(crate) fn apply_imported_settings(&mut self, mut baru: Settings) {
+        baru.sanitize();
+        let old_enabled = self.settings.calendar_enabled;
+        let old_path = if self.calendar_path.trim().is_empty() && !self.calendar_events.is_empty() {
+            self.settings.calendar_ics_path.trim().to_string()
+        } else {
+            self.calendar_path.trim().to_string()
+        };
+        let new_enabled = baru.calendar_enabled;
+        let new_path = baru.calendar_ics_path.trim().to_string();
+
+        self.settings = baru;
+        self.custom_accent_input = self.settings.custom_accent_hex.clone().unwrap_or_default();
+
+        if !new_enabled {
+            self.calendar_events.clear();
+            self.calendar_error = None;
+            self.calendar_path = self.settings.calendar_ics_path.clone();
+        } else if old_enabled && new_path == old_path {
+            self.calendar_path = self.settings.calendar_ics_path.clone();
+        } else {
+            self.calendar_events.clear();
+            self.calendar_error = None;
+            self.calendar_path = self.settings.calendar_ics_path.clone();
+            self.last_calendar_check = Instant::now()
+                .checked_sub(std::time::Duration::from_secs(60))
+                .unwrap_or_else(Instant::now);
+        }
+
+        self.touch_settings();
+    }
+
+    /// Mengimpor setelan dari berkas JSON secara ketat. Jika berkas hilang, gagal
+    /// dibaca, atau JSON tidak valid, setelan aktif dipertahankan dan banner
+    /// galat ditampilkan tanpa menandai setelan kotor (`save_at`).
+    pub(crate) fn import_settings_from_path(&mut self, path: &std::path::Path) -> bool {
+        match store::load_strict::<Settings>(path) {
+            Ok(baru) => {
+                self.apply_imported_settings(baru);
+                self.banner = Some((self.tr("settings.imported").to_string(), Instant::now()));
+                true
+            }
+            Err(err) => {
+                crate::infrastructure::logger::warn(
+                    "settings",
+                    &format!("Failed to import settings from '{}': {}", path.display(), err),
+                );
+                self.banner = Some((self.tr("settings.import_err").to_string(), Instant::now()));
+                false
+            }
+        }
+    }
+
     pub fn new(renderer: String, hover: Arc<Hover>, ctx: &egui::Context) -> Self {
         let mut settings: Settings = store::load("settings.json");
         let force_anim = settings.force_animation;
@@ -377,6 +434,8 @@ impl Noktah {
         let (is_charging, battery_pct) = crate::infrastructure::os::power_status();
         let pill_w = settings.mini_width(false, false);
         let lyrics_enabled = settings.lyrics_enabled;
+        let custom_accent_input = settings.custom_accent_hex.clone().unwrap_or_default();
+        let calendar_path = settings.calendar_ics_path.clone();
 
         // Autostart sengaja TIDAK disinkronkan di sini: konstruktor ini juga
         // dipanggil harness test, dan dulu itu menulis path harness ke registry
@@ -448,7 +507,9 @@ impl Noktah {
             peek_until: None,
             hover_since: None,
             glass_tex: None,
+            glass_raw_capture: None,
             glass_dirty: false,
+            custom_accent_input,
             lyric_manual_at: Instant::now() - std::time::Duration::from_secs(10),
             album_accent: None,
             scrubber_expand: Spring::with(0.0, 280.0, 22.0),
@@ -481,6 +542,125 @@ impl Noktah {
             pending_permissions: VecDeque::new(),
             ipc: crate::infrastructure::ipc::spawn(ctx.clone()),
             calendar_events: Vec::new(),
+            calendar_error: None,
+            calendar_path,
+            last_calendar_check: Instant::now() - std::time::Duration::from_secs(60),
+            file_shelf: Vec::new(),
+            last_audio_dev_check: Instant::now() - std::time::Duration::from_secs(10),
+            last_audio_dev_name: None,
+            custom_tiles: noktah_core::TileStore::default(),
+            system_tiles_mode: false,
+        };
+        if let Some(p) = app.resolve_default_page() {
+            app.current_page = p;
+        }
+        app
+    }
+
+    #[cfg(test)]
+    pub fn new_for_test(renderer: String, hover: Arc<Hover>, ctx: &egui::Context) -> Self {
+        let _ = ctx;
+        let settings = Settings::default();
+        let theme = Theme::from_settings(&settings);
+        let lang = settings.language;
+        let pill_w = settings.mini_width(false, false);
+
+        hover.expanded.store(false, Ordering::Relaxed);
+
+        let mut app = Self {
+            open: Spring::from_spec(0.0, MORPH_OPEN_W),
+            open_h: Spring::from_spec(0.0, MORPH_OPEN_H),
+            hovered: false,
+            hover,
+            renderer,
+            frames: 0,
+            last_frame: Instant::now(),
+            anim: Instant::now(),
+            seek_at: None,
+            settings,
+            theme,
+            show_settings: false,
+            settings_tab: SettingsTab::General,
+            dock_open: Spring::from_spec(0.0, MORPH_DOCK),
+            dock_hover_since: None,
+            dock_linger: Instant::now(),
+            current_page: NotchPage::Music,
+            pomodoro: PomodoroState::default(),
+            is_charging: false,
+            battery_pct: 100,
+            last_power_check: Instant::now(),
+            last_pomodoro_tick: Instant::now(),
+            sys: SysSampler::default(),
+            stats_at: Instant::now(),
+            todos: Vec::new(),
+            todo_input: String::new(),
+            scratchpad: Scratchpad::default(),
+            notes_save_at: None,
+            notes_mode: false,
+            media: MediaState::default(),
+            media_paused_since: None,
+            lyrics: Vec::new(),
+            lyrics_synced: false,
+            lyrics_status: LyricsStatus::Idle,
+            lyrics_provider: String::new(),
+            music: music::MusicHandle::dummy(),
+            lyrics_client: lyrics_client::LyricsHandle::dummy(),
+            art: None,
+            art_for: String::new(),
+            lyrics_for: String::new(),
+            chat: Vec::new(),
+            chat_input: String::new(),
+            ai: ai::AiHandle::dummy(),
+            api_key: String::new(),
+            api_key_input: String::new(),
+            ai_busy: false,
+            weather: weather::WeatherHandle::dummy(),
+            weather_now: None,
+            weather_city: String::new(),
+            quota: None,
+            quota_worker: crate::infrastructure::quota::QuotaHandle::dummy(),
+            updater: crate::infrastructure::updater::UpdaterHandle::dummy(),
+            update_status: crate::infrastructure::updater::UpdateStatus::Idle,
+            reduce_motion: false,
+            minimal_mix: Spring::from_spec(0.0, MORPH_MINIMAL_OUT),
+            transisi_at: None,
+            peek_until: None,
+            hover_since: None,
+            glass_tex: None,
+            glass_raw_capture: None,
+            glass_dirty: false,
+            custom_accent_input: String::new(),
+            lyric_manual_at: Instant::now() - std::time::Duration::from_secs(10),
+            album_accent: None,
+            scrubber_expand: Spring::with(0.0, 280.0, 22.0),
+            lyrics_anim: Spring::from_spec(1.0, MORPH_LYRICS),
+            pill: Spring::from_spec(pill_w, MORPH_PILL),
+            last_active_lyric: None,
+            lyric_line_active_at: Instant::now() - std::time::Duration::from_secs(10),
+            lyric_scroll_pos: 0.0,
+            lyric_target_scroll: 0.0,
+            lyric_anim_pos: Spring::from_spec(0.0, MORPH_LYRIC_LINE),
+            mini_prev_lyric: None,
+            mini_curr_lyric: None,
+            mini_lyric_at: Instant::now() - std::time::Duration::from_secs(10),
+            bands: crate::infrastructure::audio::AudioHandle::dummy(),
+            levels: [0.0; 4],
+            banner: None,
+            save_at: None,
+            lang,
+            idle_since: None,
+            trimmed: false,
+            suppress_hover: false,
+            confirm_reset_at: None,
+            show_diag_logs: false,
+            diag_logs_cache: String::new(),
+            agent: noktah_core::model::AgentState::default(),
+            mascot: crate::presentation::mascot::MascotState::new(),
+            pending_permissions: VecDeque::new(),
+            ipc: crate::infrastructure::ipc::IpcHandle::dummy(),
+            calendar_events: Vec::new(),
+            calendar_error: None,
+            calendar_path: String::new(),
             last_calendar_check: Instant::now() - std::time::Duration::from_secs(60),
             file_shelf: Vec::new(),
             last_audio_dev_check: Instant::now() - std::time::Duration::from_secs(10),
@@ -496,5 +676,75 @@ impl Noktah {
 
     pub fn tr(&self, key: &str) -> &'static str {
         i18n::t(self.lang, key)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn import_settings_gagal_mempertahankan_setelan_dan_tidak_dirty() {
+        let ctx = egui::Context::default();
+        let hover = Hover::new(false);
+        let mut app = Noktah::new_for_test("test".to_string(), hover, &ctx);
+        app.settings.language = Lang::En;
+        app.lang = Lang::En;
+        app.settings.city = "Surabaya".into();
+        app.settings.focus_minutes = 45;
+        app.save_at = None;
+        app.banner = None;
+
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let tmp_dir = std::env::temp_dir().join(format!(
+            "noktah_import_settings_test_{}_{nanos}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&tmp_dir).unwrap();
+
+        // 1. Missing file: preserves settings, save_at stays None, error banner set
+        let missing_path = tmp_dir.join("missing.json");
+        assert!(!app.import_settings_from_path(&missing_path));
+        assert_eq!(app.settings.city, "Surabaya");
+        assert_eq!(app.settings.focus_minutes, 45);
+        assert!(app.save_at.is_none(), "missing import must not schedule settings save");
+        assert_eq!(
+            app.banner.as_ref().map(|(msg, _)| msg.as_str()),
+            Some("Failed to import settings: file missing or invalid JSON")
+        );
+
+        // 2. Malformed JSON in Indonesian UI: preserves settings, save_at stays None, ID error banner
+        app.settings.language = Lang::Id;
+        app.lang = Lang::Id;
+        app.banner = None;
+        let broken_path = tmp_dir.join("broken.json");
+        std::fs::write(&broken_path, b"{ invalid json").unwrap();
+        assert!(!app.import_settings_from_path(&broken_path));
+        assert_eq!(app.settings.city, "Surabaya");
+        assert_eq!(app.settings.focus_minutes, 45);
+        assert!(app.save_at.is_none(), "malformed import must not schedule settings save");
+        assert_eq!(
+            app.banner.as_ref().map(|(msg, _)| msg.as_str()),
+            Some("Gagal mengimpor setelan: berkas tidak ditemukan atau JSON tidak valid")
+        );
+
+        // 3. Valid JSON: applies settings, marks dirty, shows imported banner
+        let valid_path = tmp_dir.join("valid.json");
+        std::fs::write(&valid_path, br#"{"city":"Yogyakarta","focus_minutes":50,"language":"en"}"#)
+            .unwrap();
+        assert!(app.import_settings_from_path(&valid_path));
+        assert_eq!(app.settings.city, "Yogyakarta");
+        assert_eq!(app.settings.focus_minutes, 50);
+        assert_eq!(app.lang, Lang::En);
+        assert!(app.save_at.is_some());
+        assert_eq!(
+            app.banner.as_ref().map(|(msg, _)| msg.as_str()),
+            Some("Settings imported")
+        );
+
+        let _ = std::fs::remove_dir_all(&tmp_dir);
     }
 }

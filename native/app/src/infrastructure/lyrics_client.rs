@@ -102,6 +102,15 @@ pub struct LyricsHandle {
     pub tx: std::sync::mpsc::Sender<Request>,
 }
 
+impl LyricsHandle {
+    #[cfg(test)]
+    pub fn dummy() -> Self {
+        let (_, rx) = channel();
+        let (tx, _) = channel();
+        Self { rx, tx }
+    }
+}
+
 pub struct Request {
     pub track_id: String,
     pub title: String,
@@ -366,6 +375,7 @@ fn fetch_lrclib(agent: &ureq::Agent, req: &Request, clean_title: &str) -> Option
     plain_fallback
 }
 
+#[allow(dead_code)]
 fn fetch_betterlyrics(agent: &ureq::Agent, req: &Request, clean_title: &str) -> Option<LyricsResult> {
     let title = urlencode(clean_title);
     let artist = urlencode(&req.artist);
@@ -560,6 +570,7 @@ fn decode_base64(input: &str) -> Option<String> {
     String::from_utf8(bytes).ok()
 }
 
+#[allow(dead_code)]
 fn parse_ttml(raw: &str) -> Vec<noktah_core::lrc::LrcLine> {
     let mut lines = Vec::new();
     let mut pos = 0;
@@ -605,6 +616,7 @@ fn parse_ttml(raw: &str) -> Vec<noktah_core::lrc::LrcLine> {
     lines
 }
 
+#[allow(dead_code)]
 fn parse_ttml_time(s: &str) -> f64 {
     let s = s.trim();
     if s.contains(':') {
