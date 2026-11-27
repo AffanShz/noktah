@@ -3,6 +3,17 @@
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/),
 versi mengikuti [SemVer](https://semver.org/lang/id/).
 
+## [2.0.0] - 2026-11-27
+
+### Ditambahkan
+- **Code Signing Dual-Mode di CI (`.github/workflows/release-native.yml`)** — langkah deteksi `detect_signing` (`GITHUB_OUTPUT` tanpa `secrets.*` di `steps[*].if:`) yang mendukung penandatanganan *Azure Trusted Signing* (`azure/trusted-signing-action@v0.5.0`) atau sertifikat PFX via `signtool.exe` + RFC3161 *timestamp* (beserta pembersihan berkas sementara di blok `finally`), serta mode *fallback* `unsigned` yang menjaga pipeline rilis tetap hijau sebelum secret dikonfigurasi, dengan urutan `SHA256` `BACA-DULU.txt` tetap kompatibel penuh dengan *self-updater*.
+- **Paket `winget` Skema `1.6.0` & Validator (`packaging/winget/`)** — generator manifest `generate-manifests.ps1` (`AffanShz.Noktah` dwibahasa `en-US`/`id-ID`, alias portabel ganda `noktah` & `noktah-hook`) dan validator `validate-manifests.ps1` berbasis regex *case-sensitive*, menghasilkan manifest yang lulus `winget validate --manifest` tanpa galat maupun peringatan serta dilampirkan sebagai `noktah-v2.0.0-winget-manifests.zip` di GitHub Release.
+- **Metadata `noktah-hook.exe` & Registrasi User `PATH` (`native/hook/build.rs`, `os.rs`, `settings.rs`)** — embedding resource `VERSIONINFO` (`ProductName = "Noktah"`) + manifest `asInvoker`, penambahan/penghapusan `HKCU\Environment\Path` (`REG_EXPAND_SZ` + `WM_SETTINGCHANGE`) yang aman terhadap binary uji via guard ganda `cfg!(test)` + `looks_like_test_binary()`, i18n dwibahasa ID+EN, serta saklar di *Settings → AI*.
+- **Panduan Distribusi & Pembaruan Dokumentasi (`docs/DISTRIBUTION.md`, `README.md`)** — panduan lengkap instalasi `winget`, pengajuan PR ke `winget-pkgs`, konfigurasi GitHub Secrets Code Signing, serta dokumentasi fitur terbaru.
+
+### Diperbaiki
+- **Penjajaran Kolom *Row* Pengaturan (`widgets::row_desc`)** — pembatasan lebar kolom kiri terhadap kontrol kanan yang direserve/cache agar deskripsi panjang pada jendela *Settings* ukuran minimum `640×460` membungkus rapi tanpa menabrak tombol/saklar kanan (`244` unit test lulus, `0` compiler warning).
+
 ## [1.6.1] - 2026-11-27
 
 ### Ditambahkan
