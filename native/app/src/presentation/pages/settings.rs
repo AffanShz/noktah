@@ -28,7 +28,7 @@ impl Noktah {
 
     /// Tab 0: General — start behavior, language
     fn draw_general_tab(&mut self, ui: &mut egui::Ui, lang: noktah_core::settings::Lang, theme: Theme) {
-        widgets::section(ui, "Startup", &theme);
+        widgets::section(ui, i18n::t(lang, "settings.section_startup"), &theme);
         widgets::card_group(ui, |ui| {
             widgets::row_desc(
                 ui,
@@ -95,7 +95,7 @@ impl Noktah {
 
     /// Tab 1: Display — window chrome, notch shape, animations
     fn draw_display_tab(&mut self, ui: &mut egui::Ui, lang: noktah_core::settings::Lang, theme: Theme) {
-        widgets::section(ui, "Window", &theme);
+        widgets::section(ui, i18n::t(lang, "settings.section_window"), &theme);
         widgets::card_group(ui, |ui| {
             widgets::row_desc(
                 ui,
@@ -149,16 +149,16 @@ impl Noktah {
             widgets::row_desc(
                 ui,
                 i18n::t(lang, "settings.monitor_mode"),
-                "Pilih layar penempatan (Layar Utama atau Ikuti Kursor)",
+                i18n::t(lang, "settings.monitor_mode_desc"),
                 &theme,
                 |ui| {
-                    let cur_label = self.settings.monitor_mode.label();
+                    let cur_label = self.settings.monitor_mode.label(lang);
                     egui::ComboBox::from_id_salt("settings_monitor_mode")
                         .selected_text(cur_label)
                         .show_ui(ui, |ui| {
                             for m in noktah_core::MonitorMode::ALL {
                                 if ui
-                                    .selectable_label(self.settings.monitor_mode == m, m.label())
+                                    .selectable_label(self.settings.monitor_mode == m, m.label(lang))
                                     .clicked()
                                 {
                                     self.settings.monitor_mode = m;
@@ -204,14 +204,53 @@ impl Noktah {
                     }
                 },
             );
+            if self.settings.calendar_enabled {
+                widgets::card_divider(ui);
+                widgets::row_desc(
+                    ui,
+                    i18n::t(lang, "settings.calendar_ics_path"),
+                    i18n::t(lang, "settings.calendar_ics_path_desc"),
+                    &theme,
+                    |ui| {
+                        let mut path_buf = self.settings.calendar_ics_path.clone();
+                        let resp = ui.add(
+                            egui::TextEdit::singleline(&mut path_buf)
+                                .hint_text(r"%APPDATA%\Noktah\calendar.ics")
+                                .desired_width(170.0),
+                        );
+                        if resp.changed() {
+                            self.settings.calendar_ics_path = path_buf;
+                            self.calendar_events.clear();
+                            if self.settings.calendar_ics_path.trim().is_empty() {
+                                self.calendar_error = None;
+                            }
+                            self.last_calendar_check = std::time::Instant::now()
+                                .checked_sub(std::time::Duration::from_secs(60))
+                                .unwrap_or_else(std::time::Instant::now);
+                            self.touch_settings();
+                        }
+                    },
+                );
+                if let Some(err) = &self.calendar_error {
+                    ui.label(
+                        egui::RichText::new(format!(
+                            "{}: {}",
+                            i18n::t(lang, "settings.calendar_ics_error"),
+                            err
+                        ))
+                        .size(style::T_CAPTION)
+                        .color(Color32::from_rgb(239, 68, 68)),
+                    );
+                }
+            }
         });
 
-        widgets::section(ui, "Notch & Motion", &theme);
+        widgets::section(ui, i18n::t(lang, "settings.section_notch_motion"), &theme);
         widgets::card_group(ui, |ui| {
             widgets::row_desc(
                 ui,
                 i18n::t(lang, "settings.minimal_notch"),
-                "Ciutkan notch jadi garis tipis saat panel tertutup",
+                i18n::t(lang, "settings.minimal_notch_desc"),
                 &theme,
                 |ui| {
                     if widgets::toggle(ui, &mut self.settings.minimal_notch, &theme) {
@@ -235,12 +274,12 @@ impl Noktah {
             });
         });
 
-        widgets::section(ui, "Navigation Menu", &theme);
+        widgets::section(ui, i18n::t(lang, "settings.section_nav_menu"), &theme);
         widgets::card_group(ui, |ui| {
             widgets::row_desc(
                 ui,
-                "Home",
-                "Tampilkan halaman Dashboard di menu navigasi",
+                i18n::t(lang, "tab.home"),
+                i18n::t(lang, "settings.nav_home_desc"),
                 &theme,
                 |ui| {
                     if widgets::toggle(ui, &mut self.settings.nav_home, &theme) {
@@ -251,8 +290,8 @@ impl Noktah {
             widgets::card_divider(ui);
             widgets::row_desc(
                 ui,
-                "Music",
-                "Tampilkan pemutar musik & lirik di menu navigasi",
+                i18n::t(lang, "tab.music"),
+                i18n::t(lang, "settings.nav_music_desc"),
                 &theme,
                 |ui| {
                     if widgets::toggle(ui, &mut self.settings.nav_music, &theme) {
@@ -263,8 +302,8 @@ impl Noktah {
             widgets::card_divider(ui);
             widgets::row_desc(
                 ui,
-                "Focus (Pomodoro)",
-                "Tampilkan timer fokus Pomodoro di menu navigasi",
+                i18n::t(lang, "settings.nav_focus"),
+                i18n::t(lang, "settings.nav_focus_desc"),
                 &theme,
                 |ui| {
                     if widgets::toggle(ui, &mut self.settings.nav_pomodoro, &theme) {
@@ -275,8 +314,8 @@ impl Noktah {
             widgets::card_divider(ui);
             widgets::row_desc(
                 ui,
-                "Tasks",
-                "Tampilkan daftar tugas to-do di menu navigasi",
+                i18n::t(lang, "tab.tasks"),
+                i18n::t(lang, "settings.nav_tasks_desc"),
                 &theme,
                 |ui| {
                     if widgets::toggle(ui, &mut self.settings.nav_tasks, &theme) {
@@ -287,8 +326,8 @@ impl Noktah {
             widgets::card_divider(ui);
             widgets::row_desc(
                 ui,
-                "System",
-                "Tampilkan monitor sistem CPU & RAM di menu navigasi",
+                i18n::t(lang, "tab.system"),
+                i18n::t(lang, "settings.nav_system_desc"),
                 &theme,
                 |ui| {
                     if widgets::toggle(ui, &mut self.settings.nav_system, &theme) {
@@ -299,8 +338,8 @@ impl Noktah {
             widgets::card_divider(ui);
             widgets::row_desc(
                 ui,
-                "Ask (AI)",
-                "Tampilkan obrolan AI di menu navigasi",
+                i18n::t(lang, "settings.nav_ask"),
+                i18n::t(lang, "settings.nav_ask_desc"),
                 &theme,
                 |ui| {
                     if widgets::toggle(ui, &mut self.settings.nav_ask, &theme) {
@@ -311,8 +350,8 @@ impl Noktah {
             widgets::card_divider(ui);
             widgets::row_desc(
                 ui,
-                "Agent",
-                "Tampilkan agen Claude Code di menu navigasi",
+                i18n::t(lang, "tab.agent"),
+                i18n::t(lang, "settings.nav_agent_desc"),
                 &theme,
                 |ui| {
                     if widgets::toggle(ui, &mut self.settings.nav_agent, &theme) {
@@ -327,11 +366,15 @@ impl Noktah {
     pub(crate) fn draw_appearance_tab(&mut self, ui: &mut egui::Ui, lang: noktah_core::settings::Lang, theme: Theme) {
         widgets::section(ui, i18n::t(lang, "settings.presets"), &theme);
         widgets::card_group(ui, |ui| {
+            ui.label(style::cap(i18n::t(lang, "settings.presets_desc"), theme.dim));
+            ui.add_space(style::S1);
             ui.horizontal_wrapped(|ui| {
                 for preset in noktah_core::ThemePreset::built_in_presets() {
                     let dipilih = self.settings.theme_preset == preset.id_slug();
                     if widgets::chip_button(ui, &preset.name, dipilih, &theme) {
                         preset.apply_to(&mut self.settings);
+                        self.custom_accent_input =
+                            self.settings.custom_accent_hex.clone().unwrap_or_default();
                         self.touch_settings();
                     }
                 }
@@ -361,6 +404,8 @@ impl Noktah {
 
                     if let Some(preset) = maybe_preset {
                         preset.apply_to(&mut self.settings);
+                        self.custom_accent_input =
+                            self.settings.custom_accent_hex.clone().unwrap_or_default();
                         self.touch_settings();
                         self.banner = Some((
                             i18n::t(lang, "settings.preset_imported").to_string(),
@@ -376,7 +421,7 @@ impl Noktah {
             });
         });
 
-        widgets::section(ui, "Theme & Accent", &theme);
+        widgets::section(ui, i18n::t(lang, "settings.section_theme_accent"), &theme);
         widgets::card_group(ui, |ui| {
             widgets::row_desc(
                 ui,
@@ -390,6 +435,7 @@ impl Noktah {
                         if widgets::swatch(ui, Color32::from_rgb(r, g, b), dipilih, &theme) {
                             self.settings.accent = accent;
                             self.settings.custom_accent_hex = None;
+                            self.custom_accent_input.clear();
                             self.settings.theme_preset = "custom".into();
                             self.touch_settings();
                         }
@@ -400,28 +446,39 @@ impl Noktah {
             widgets::row_desc(
                 ui,
                 i18n::t(lang, "settings.custom_accent"),
-                "Format #RRGGBB (contoh: #3B82F6)",
+                i18n::t(lang, "settings.custom_accent_desc"),
                 &theme,
                 |ui| {
-                    let mut hex_buf = self.settings.custom_accent_hex.clone().unwrap_or_default();
                     let resp = ui.add(
-                        egui::TextEdit::singleline(&mut hex_buf)
+                        egui::TextEdit::singleline(&mut self.custom_accent_input)
+                            .id(egui::Id::new("custom_accent_hex_input"))
                             .hint_text("#RRGGBB")
                             .desired_width(85.0),
                     );
                     if resp.changed() {
-                        if hex_buf.trim().is_empty() {
+                        let trimmed = self.custom_accent_input.trim();
+                        if trimmed.is_empty() {
                             self.settings.custom_accent_hex = None;
                             self.settings.theme_preset = "custom".into();
                             self.touch_settings();
-                        } else if let Some(rgb) = noktah_core::theme_preset::parse_hex_rgb(&hex_buf) {
+                        } else if let Some(rgb) = noktah_core::theme_preset::parse_hex_rgb(trimmed) {
                             self.settings.custom_accent_hex = Some(noktah_core::theme_preset::format_hex_rgb(rgb));
                             self.settings.theme_preset = "custom".into();
                             self.touch_settings();
                         }
                     }
-                    if self.settings.custom_accent_hex.is_some() {
-                        if widgets::chip_button(ui, "Reset", false, &theme) {
+                    let is_invalid = !self.custom_accent_input.trim().is_empty()
+                        && noktah_core::theme_preset::parse_hex_rgb(self.custom_accent_input.trim()).is_none();
+                    if is_invalid {
+                        ui.label(
+                            egui::RichText::new(i18n::t(lang, "settings.custom_accent_invalid"))
+                                .size(style::T_CAPTION)
+                                .color(Color32::from_rgb(239, 68, 68)),
+                        );
+                    }
+                    if self.settings.custom_accent_hex.is_some() || !self.custom_accent_input.is_empty() {
+                        if widgets::chip_button(ui, i18n::t(lang, "common.reset"), false, &theme) {
+                            self.custom_accent_input.clear();
                             self.settings.custom_accent_hex = None;
                             self.settings.theme_preset = "custom".into();
                             self.touch_settings();
@@ -433,7 +490,7 @@ impl Noktah {
             widgets::row_desc(
                 ui,
                 i18n::t(lang, "settings.dynamic_accent"),
-                "Aksen dinamis mengikuti warna album musik",
+                i18n::t(lang, "settings.dynamic_accent_desc"),
                 &theme,
                 |ui| {
                     if widgets::toggle(ui, &mut self.settings.dynamic_accent, &theme) {
@@ -496,7 +553,7 @@ impl Noktah {
             ui.horizontal_wrapped(|ui| {
                 for efek in noktah_core::settings::GlassEffect::ALL {
                     let dipilih = self.settings.glass_effect == efek;
-                    if widgets::chip_button(ui, efek.label(), dipilih, &theme) {
+                    if widgets::chip_button(ui, efek.label(lang), dipilih, &theme) {
                         self.settings.glass_effect = efek;
                         self.settings.theme_preset = "custom".into();
                         self.touch_settings();
@@ -599,7 +656,7 @@ impl Noktah {
     fn draw_mini_row_settings(&mut self, ui: &mut egui::Ui, lang: noktah_core::settings::Lang, theme: &Theme) {
         widgets::section(ui, i18n::t(lang, "settings.mini_row"), theme);
         ui.label(
-            egui::RichText::new("Pilih komponen yang tampil di baris compact saat notch tertutup:")
+            egui::RichText::new(i18n::t(lang, "settings.mini_row_desc"))
                 .size(style::T_CAPTION)
                 .color(theme.dim),
         );
@@ -607,21 +664,16 @@ impl Noktah {
 
         // Preset Cepat Siap Pakai
         ui.horizontal_wrapped(|ui| {
-            if widgets::chip_button(ui, "Mode Lirik", false, theme) {
-                self.settings.apply_preset(noktah_core::MiniPreset::ModeLirik);
-                self.touch_settings();
-            }
-            if widgets::chip_button(ui, "Fokus Lirik", false, theme) {
-                self.settings.apply_preset(noktah_core::MiniPreset::FokusLirik);
-                self.touch_settings();
-            }
-            if widgets::chip_button(ui, "Standar", false, theme) {
-                self.settings.apply_preset(noktah_core::MiniPreset::Standar);
-                self.touch_settings();
-            }
-            if widgets::chip_button(ui, "Lengkap", false, theme) {
-                self.settings.apply_preset(noktah_core::MiniPreset::Lengkap);
-                self.touch_settings();
+            for preset in [
+                noktah_core::MiniPreset::ModeLirik,
+                noktah_core::MiniPreset::FokusLirik,
+                noktah_core::MiniPreset::Standar,
+                noktah_core::MiniPreset::Lengkap,
+            ] {
+                if widgets::chip_button(ui, preset.label(lang), false, theme) {
+                    self.settings.apply_preset(preset);
+                    self.touch_settings();
+                }
             }
         });
         ui.add_space(style::S2);
@@ -642,7 +694,7 @@ impl Noktah {
         widgets::row_desc(
             ui,
             i18n::t(lang, "settings.mini_lyrics"),
-            "Tampilkan lirik lagu berjalan satu baris",
+            i18n::t(lang, "settings.mini_lyrics_desc"),
             theme,
             |ui| {
                 if widgets::toggle(ui, &mut self.settings.mini_lyrics, theme) {
@@ -653,7 +705,7 @@ impl Noktah {
         widgets::row_desc(
             ui,
             i18n::t(lang, "settings.mini_wave"),
-            "Bilah equalizer audio bergerak",
+            i18n::t(lang, "settings.mini_wave_desc"),
             theme,
             |ui| {
                 if widgets::toggle(ui, &mut self.settings.mini_wave, theme) {
@@ -664,7 +716,7 @@ impl Noktah {
         widgets::row_desc(
             ui,
             i18n::t(lang, "settings.mini_agent"),
-            "Avatar Maskot Noki & status aktivitas Claude Code",
+            i18n::t(lang, "settings.mini_agent_desc"),
             theme,
             |ui| {
                 if widgets::toggle(ui, &mut self.settings.mini_agent, theme) {
@@ -675,7 +727,7 @@ impl Noktah {
         widgets::row_desc(
             ui,
             i18n::t(lang, "settings.mini_art"),
-            "Gambar sampul album melingkar",
+            i18n::t(lang, "settings.mini_art_desc"),
             theme,
             |ui| {
                 if widgets::toggle(ui, &mut self.settings.mini_art, theme) {
@@ -686,7 +738,7 @@ impl Noktah {
         widgets::row_desc(
             ui,
             i18n::t(lang, "settings.mini_title"),
-            "Nama lagu dan artis musik",
+            i18n::t(lang, "settings.mini_title_desc"),
             theme,
             |ui| {
                 if widgets::toggle(ui, &mut self.settings.mini_title, theme) {
@@ -697,7 +749,7 @@ impl Noktah {
         widgets::row_desc(
             ui,
             i18n::t(lang, "settings.mini_progress"),
-            "Pendar garis progres lagu di dasar pill",
+            i18n::t(lang, "settings.mini_progress_desc"),
             theme,
             |ui| {
                 if widgets::toggle(ui, &mut self.settings.mini_progress, theme) {
@@ -708,7 +760,7 @@ impl Noktah {
         widgets::row_desc(
             ui,
             i18n::t(lang, "settings.mini_controls"),
-            "Tombol putar, jeda, dan lagu berikutnya",
+            i18n::t(lang, "settings.mini_controls_desc"),
             theme,
             |ui| {
                 if widgets::toggle(ui, &mut self.settings.mini_controls, theme) {
@@ -719,7 +771,7 @@ impl Noktah {
         widgets::row_desc(
             ui,
             i18n::t(lang, "settings.mini_clock"),
-            "Penunjuk jam digital di pill",
+            i18n::t(lang, "settings.mini_clock_desc"),
             theme,
             |ui| {
                 if widgets::toggle(ui, &mut self.settings.mini_clock, theme) {
@@ -751,18 +803,41 @@ impl Noktah {
         );
     }
 
-    /// Tab 4: Todo / Tasks — todo settings (placeholder for future reminders)
-    fn draw_todo_tab(&mut self, ui: &mut egui::Ui, lang: noktah_core::settings::Lang, theme: Theme) {
-        widgets::section(ui, "Tasks & Reminders", &theme);
+    /// Tab 4: Todo / Tasks — todo settings
+    pub(crate) fn draw_todo_tab(&mut self, ui: &mut egui::Ui, lang: noktah_core::settings::Lang, theme: Theme) {
+        widgets::section(ui, i18n::t(lang, "settings.section_tasks_reminders"), &theme);
         widgets::card_group(ui, |ui| {
-            ui.label(
-                egui::RichText::new("Task reminders coming soon")
-                    .size(style::T_BODY)
-                    .color(theme.dim),
+            let active_count = self.todos.iter().filter(|t| !t.done).count();
+            let reminder_count = noktah_core::reminders::pending_reminder_count(&self.todos);
+            widgets::row(
+                ui,
+                i18n::t(lang, "settings.todo_tip"),
+                &theme,
+                |ui| {
+                    ui.label(
+                        egui::RichText::new(format!(
+                            "{active_count} {}, {reminder_count} {}",
+                            i18n::t(lang, "settings.todo_stats_active"),
+                            i18n::t(lang, "settings.todo_stats_reminders"),
+                        ))
+                        .size(style::T_CAPTION)
+                        .color(theme.dim),
+                    );
+                },
             );
+            let has_done = self.todos.iter().any(|t| t.done);
+            if has_done {
+                widgets::card_divider(ui);
+                ui.horizontal(|ui| {
+                    if widgets::chip_button(ui, i18n::t(lang, "settings.todo_clear_done"), false, &theme) {
+                        self.todos.retain(|t| !t.done);
+                        self.save_todos();
+                    }
+                });
+            }
         });
 
-        widgets::section(ui, "Profile & Location", &theme);
+        widgets::section(ui, i18n::t(lang, "settings.section_profile_location"), &theme);
         widgets::card_group(ui, |ui| {
             widgets::row(ui, i18n::t(lang, "settings.city"), &theme, |ui| {
                 let mut teks = self.settings.city.clone();
@@ -785,7 +860,7 @@ impl Noktah {
                     .add(
                         egui::TextEdit::singleline(&mut teks)
                             .desired_width(170.0)
-                            .hint_text("Kamu"),
+                            .hint_text(i18n::t(lang, "settings.name_hint")),
                     )
                     .changed()
                 {
@@ -798,11 +873,11 @@ impl Noktah {
 
     /// Tab 5: Pomodoro — focus timer settings
     fn draw_pomodoro_tab(&mut self, ui: &mut egui::Ui, lang: noktah_core::settings::Lang, theme: Theme) {
-        widgets::section(ui, "Focus Session", &theme);
+        widgets::section(ui, i18n::t(lang, "settings.section_focus_session"), &theme);
         widgets::card_group(ui, |ui| {
             widgets::row(
                 ui,
-                "Focus length",
+                i18n::t(lang, "settings.focus_length"),
                 &theme,
                 |ui| {
                     let mut menit = self.settings.focus_minutes as f32;
@@ -823,13 +898,17 @@ impl Noktah {
                         self.touch_settings();
                     }
                     ui.label(style::cap(
-                        format!("{} min", self.settings.focus_minutes),
+                        format!(
+                            "{} {}",
+                            self.settings.focus_minutes,
+                            i18n::t(lang, "common.minutes_short")
+                        ),
                         theme.faint,
                     ));
                 },
             );
             widgets::card_divider(ui);
-            widgets::row(ui, "Break length", &theme, |ui| {
+            widgets::row(ui, i18n::t(lang, "settings.break_length"), &theme, |ui| {
                 let mut menit = self.settings.break_minutes as f32;
                 ui.spacing_mut().slider_width = 150.0;
                 if ui
@@ -854,7 +933,11 @@ impl Noktah {
                     self.touch_settings();
                 }
                 ui.label(style::cap(
-                    format!("{} min", self.settings.break_minutes),
+                    format!(
+                        "{} {}",
+                        self.settings.break_minutes,
+                        i18n::t(lang, "common.minutes_short")
+                    ),
                     theme.faint,
                 ));
             });
@@ -872,7 +955,7 @@ impl Noktah {
             );
         });
 
-        widgets::section(ui, "Activity", &theme);
+        widgets::section(ui, i18n::t(lang, "settings.section_activity"), &theme);
         widgets::card_group(ui, |ui| {
             let summary = if lang == noktah_core::Lang::Id {
                 format!(
@@ -907,11 +990,11 @@ impl Noktah {
         widgets::card_group(ui, |ui| {
             widgets::row(ui, i18n::t(lang, "settings.provider"), &theme, |ui| {
                 egui::ComboBox::from_id_salt("penyedia")
-                    .selected_text(self.settings.provider.label())
+                    .selected_text(self.settings.provider.label(lang))
                     .show_ui(ui, |ui| {
                         for p in noktah_core::Provider::ALL {
                             if ui
-                                .selectable_label(self.settings.provider == p, p.label())
+                                .selectable_label(self.settings.provider == p, p.label(lang))
                                 .clicked()
                             {
                                 self.settings.switch_provider(p);
@@ -1154,7 +1237,7 @@ impl Noktah {
     }
 
     /// Tab 7: About — version, credits
-    fn draw_about_tab(&mut self, ui: &mut egui::Ui, lang: noktah_core::settings::Lang, theme: Theme) {
+    pub(crate) fn draw_about_tab(&mut self, ui: &mut egui::Ui, lang: noktah_core::settings::Lang, theme: Theme) {
         widgets::section(ui, "Noktah", &theme);
         widgets::card_group(ui, |ui| {
             ui.label(
@@ -1164,7 +1247,7 @@ impl Noktah {
                     .color(Color32::WHITE),
             );
             ui.add_space(4.0);
-            ui.label(style::text("Native Windows Dynamic Island & Notch", theme.dim));
+            ui.label(style::text(i18n::t(lang, "settings.about_tagline"), theme.dim));
             ui.add_space(8.0);
             ui.label(style::cap("© 2026 AffanShz. MIT License.", theme.faint));
         });
@@ -1196,24 +1279,33 @@ impl Noktah {
 
             match &self.update_status {
                 UpdateStatus::Idle => {
-                    ui.label(style::cap("Klik tombol di atas untuk memeriksa rilis terbaru di GitHub.", theme.dim));
+                    ui.label(style::cap(i18n::t(lang, "settings.update_idle"), theme.dim));
                 }
                 UpdateStatus::Checking => {
-                    ui.label(style::cap("Menghubungi GitHub Releases…", theme.accent));
+                    ui.label(style::cap(
+                        i18n::t(lang, "settings.update_checking_hint"),
+                        theme.accent,
+                    ));
                 }
                 UpdateStatus::LatestVersion(ver) => {
                     ui.label(
-                        egui::RichText::new(format!("✓ Noktah sudah menggunakan versi terbaru ({ver})"))
-                            .size(style::T_CAPTION)
-                            .color(Color32::from_rgb(34, 197, 94)),
+                        egui::RichText::new(format!(
+                            "{} ({ver})",
+                            i18n::t(lang, "settings.update_latest")
+                        ))
+                        .size(style::T_CAPTION)
+                        .color(Color32::from_rgb(34, 197, 94)),
                     );
                 }
                 UpdateStatus::UpdateAvailable { version, name, body, url, zip_url } => {
                     ui.label(
-                        egui::RichText::new(format!("★ Pembaruan Tersedia: {name} ({version})"))
-                            .size(style::T_BODY)
-                            .strong()
-                            .color(theme.accent),
+                        egui::RichText::new(format!(
+                            "{}: {name} ({version})",
+                            i18n::t(lang, "settings.update_available")
+                        ))
+                        .size(style::T_BODY)
+                        .strong()
+                        .color(theme.accent),
                     );
 
                     if !body.trim().is_empty() {
@@ -1235,7 +1327,12 @@ impl Noktah {
                                 });
                             }
                         }
-                        if widgets::chip_button(ui, "Buka Halaman Rilis GitHub ↗", false, &theme) {
+                        if widgets::chip_button(
+                            ui,
+                            i18n::t(lang, "settings.update_open_github"),
+                            false,
+                            &theme,
+                        ) {
                             ui.ctx().open_url(egui::OpenUrl::new_tab(&url_clone));
                             #[cfg(windows)]
                             {
@@ -1256,11 +1353,31 @@ impl Noktah {
                         .color(theme.accent),
                     );
                 }
-                UpdateStatus::ReadyToRestart { version, staged_exe, staged_hook } => {
+                UpdateStatus::ReadyToRestart {
+                    version,
+                    staged_exe,
+                    staged_hook,
+                    sha256_verified,
+                } => {
+                    let (suffix_key, msg_color) = if *sha256_verified {
+                        (
+                            "settings.update_ready_suffix",
+                            Color32::from_rgb(34, 197, 94),
+                        )
+                    } else {
+                        (
+                            "settings.update_ready_unverified_suffix",
+                            Color32::from_rgb(245, 158, 11),
+                        )
+                    };
                     ui.label(
-                        egui::RichText::new(format!("✓ Paket {version} terverifikasi SHA-256 dan siap dipasang."))
-                            .size(style::T_CAPTION)
-                            .color(Color32::from_rgb(34, 197, 94)),
+                        egui::RichText::new(format!(
+                            "{} {version} {}",
+                            i18n::t(lang, "settings.update_ready_prefix"),
+                            i18n::t(lang, suffix_key)
+                        ))
+                        .size(style::T_CAPTION)
+                        .color(msg_color),
                     );
                     ui.add_space(6.0);
                     if widgets::chip_button(ui, i18n::t(lang, "settings.restart_to_apply"), true, &theme) {
@@ -1268,10 +1385,14 @@ impl Noktah {
                     }
                 }
                 UpdateStatus::Error(err) => {
+                    let detail = format_update_error(lang, err);
                     ui.label(
-                        egui::RichText::new(format!("Gagal: {err}"))
-                            .size(style::T_CAPTION)
-                            .color(Color32::from_rgb(239, 68, 68)),
+                        egui::RichText::new(format!(
+                            "{}: {detail}",
+                            i18n::t(lang, "settings.update_failed")
+                        ))
+                        .size(style::T_CAPTION)
+                        .color(Color32::from_rgb(239, 68, 68)),
                     );
                 }
             }
@@ -1311,17 +1432,13 @@ impl Noktah {
                 if widgets::chip_button(ui, i18n::t(lang, "settings.export"), false, &theme) {
                     crate::infrastructure::store::save("settings-export.json", &self.settings);
                     self.banner = Some((
-                        "Setelan diekspor ke settings-export.json".into(),
+                        i18n::t(lang, "settings.exported").to_string(),
                         std::time::Instant::now(),
                     ));
                 }
                 if widgets::chip_button(ui, i18n::t(lang, "settings.import"), false, &theme) {
-                    let mut baru: noktah_core::Settings =
-                        crate::infrastructure::store::load("settings-export.json");
-                    baru.sanitize();
-                    self.settings = baru;
-                    self.touch_settings();
-                    self.banner = Some(("Setelan diimpor".into(), std::time::Instant::now()));
+                    let path = crate::infrastructure::store::data_dir().join("settings-export.json");
+                    self.import_settings_from_path(&path);
                 }
                 let confirming = self
                     .confirm_reset_at
@@ -1350,6 +1467,15 @@ impl Noktah {
                         self.api_key_input.clear();
                         self.lyrics.clear();
                         self.lyrics_for.clear();
+                        self.custom_tiles.clear();
+                        self.system_tiles_mode = false;
+                        self.file_shelf.clear();
+                        self.calendar_events.clear();
+                        self.calendar_error = None;
+                        self.calendar_path.clear();
+                        self.custom_accent_input.clear();
+                        self.glass_tex = None;
+                        self.glass_raw_capture = None;
                         self.confirm_reset_at = None;
                         self.touch_settings();
                         self.banner = Some((
@@ -1435,6 +1561,152 @@ impl Noktah {
                     });
             }
         });
+    }
+}
+
+/// Memformat galat terstruktur updater sesuai bahasa antarmuka.
+pub(crate) fn format_update_error(
+    lang: noktah_core::settings::Lang,
+    err: &crate::infrastructure::updater::UpdateError,
+) -> String {
+    use crate::infrastructure::updater::UpdateError;
+    match err {
+        UpdateError::GitHubUnreachable(detail) => {
+            format!("{}: {detail}", i18n::t(lang, "settings.update_err.github_unreachable"))
+        }
+        UpdateError::HttpStatus { status } => {
+            format!("{} {status}", i18n::t(lang, "settings.update_err.http_status"))
+        }
+        UpdateError::InvalidReleaseJson(detail) => {
+            format!("{}: {detail}", i18n::t(lang, "settings.update_err.invalid_json"))
+        }
+        UpdateError::UntrustedDownloadUrl => {
+            i18n::t(lang, "settings.update_err.untrusted_url").to_string()
+        }
+        UpdateError::AssetMissing(file) => {
+            format!("{}: {file}", i18n::t(lang, "settings.update_err.asset_missing"))
+        }
+        UpdateError::StagingDirFailed(detail) => {
+            format!("{}: {detail}", i18n::t(lang, "settings.update_err.staging_dir"))
+        }
+        UpdateError::DownloadFailed(detail) => {
+            format!("{}: {detail}", i18n::t(lang, "settings.update_err.download"))
+        }
+        UpdateError::ArchiveReadFailed(detail) => {
+            format!("{}: {detail}", i18n::t(lang, "settings.update_err.archive_read"))
+        }
+        UpdateError::ArchiveTooLarge { max_mb } => {
+            format!("{} ({max_mb} MB)", i18n::t(lang, "settings.update_err.too_large"))
+        }
+        UpdateError::ArchiveWriteFailed(detail) => {
+            format!("{}: {detail}", i18n::t(lang, "settings.update_err.archive_write"))
+        }
+        UpdateError::ExtractFailed { code } => match code {
+            Some(c) => format!(
+                "{} ({} {c}).",
+                i18n::t(lang, "settings.update_err.extract_status"),
+                i18n::t(lang, "settings.update_err.code")
+            ),
+            None => format!("{}.", i18n::t(lang, "settings.update_err.extract_status")),
+        },
+        UpdateError::ExtractSpawnFailed(detail) => {
+            format!("{}: {detail}", i18n::t(lang, "settings.update_err.extract_spawn"))
+        }
+        UpdateError::InvalidBinary { file } => {
+            format!("{}: {file}", i18n::t(lang, "settings.update_err.invalid_binary"))
+        }
+        UpdateError::BinaryReadFailed { file, detail } => {
+            format!("{} ({file}): {detail}", i18n::t(lang, "settings.update_err.binary_read"))
+        }
+        UpdateError::Sha256Mismatch { file } => {
+            format!("{}: {file}", i18n::t(lang, "settings.update_err.sha256_mismatch"))
+        }
+        UpdateError::InstallError(detail) => {
+            format!("{}: {detail}", i18n::t(lang, "settings.update_err.install"))
+        }
+        UpdateError::HookUpdateFailed(detail) => {
+            format!("{}: {detail}", i18n::t(lang, "settings.update_err.hook_update"))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::infrastructure::updater::UpdateError;
+    use noktah_core::Lang;
+
+    #[test]
+    fn update_error_terlokalisasi_penuh_dalam_id_dan_en() {
+        let cases = [
+            UpdateError::GitHubUnreachable("dns timeout".into()),
+            UpdateError::HttpStatus { status: 503 },
+            UpdateError::InvalidReleaseJson("unexpected eof".into()),
+            UpdateError::UntrustedDownloadUrl,
+            UpdateError::AssetMissing("noktah-win64.zip".into()),
+            UpdateError::StagingDirFailed("access denied".into()),
+            UpdateError::DownloadFailed("connection reset".into()),
+            UpdateError::ArchiveReadFailed("io error".into()),
+            UpdateError::ArchiveTooLarge { max_mb: 64 },
+            UpdateError::ArchiveWriteFailed("disk full".into()),
+            UpdateError::ExtractFailed { code: Some(2) },
+            UpdateError::ExtractFailed { code: None },
+            UpdateError::ExtractSpawnFailed("not found".into()),
+            UpdateError::InvalidBinary {
+                file: "noktah-native.exe".into(),
+            },
+            UpdateError::BinaryReadFailed {
+                file: "noktah-native.exe".into(),
+                detail: "permission denied".into(),
+            },
+            UpdateError::Sha256Mismatch {
+                file: "noktah-native.exe".into(),
+            },
+            UpdateError::InstallError("script write error".into()),
+            UpdateError::HookUpdateFailed("noktah-hook.exe".into()),
+        ];
+
+        for err in &cases {
+            let id_msg = format_update_error(Lang::Id, err);
+            let en_msg = format_update_error(Lang::En, err);
+            assert!(!id_msg.trim().is_empty(), "ID msg empty for {err:?}");
+            assert!(!en_msg.trim().is_empty(), "EN msg empty for {err:?}");
+            assert_ne!(id_msg, en_msg, "ID and EN must differ for {err:?}");
+
+            // EN must not leak Indonesian prose
+            for id_word in [
+                "Gagal",
+                "Tidak dapat",
+                "berkas",
+                "Berkas",
+                "pembaruan",
+                "unduhan",
+                "paket",
+                "kode",
+                "mengunduh",
+            ] {
+                assert!(
+                    !en_msg.contains(id_word),
+                    "EN msg '{en_msg}' leaked Indonesian '{id_word}' for {err:?}"
+                );
+            }
+
+            // ID must not leak English prose (ignore language-neutral technical detail tokens)
+            for en_phrase in [
+                "Unable to",
+                "Failed to",
+                "Server returned",
+                "Release asset missing",
+                "Extracted binary",
+                "SHA-256 verification failed",
+                "Download URL",
+            ] {
+                assert!(
+                    !id_msg.contains(en_phrase),
+                    "ID msg '{id_msg}' leaked English '{en_phrase}' for {err:?}"
+                );
+            }
+        }
     }
 }
 

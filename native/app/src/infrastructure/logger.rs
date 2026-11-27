@@ -84,14 +84,23 @@ pub(crate) fn clear_in(logs_dir: &Path) {
 }
 
 pub fn info(scope: &str, msg: &str) {
+    if cfg!(test) {
+        return;
+    }
     write_entry_in(&logs_dir(), "INFO", scope, msg);
 }
 
 pub fn warn(scope: &str, msg: &str) {
+    if cfg!(test) {
+        return;
+    }
     write_entry_in(&logs_dir(), "WARN", scope, msg);
 }
 
 pub fn error(scope: &str, msg: &str) {
+    if cfg!(test) {
+        return;
+    }
     write_entry_in(&logs_dir(), "ERROR", scope, msg);
 }
 

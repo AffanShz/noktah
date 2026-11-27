@@ -296,7 +296,7 @@ mod tests {
     #[test]
     fn verifikasi_semua_halaman_presisi_tanpa_overflow() {
         egui::__run_test_ui(|ui| {
-            let mut app = crate::app::Noktah::new(
+            let mut app = crate::app::Noktah::new_for_test(
                 "test".to_string(),
                 crate::infrastructure::platform::Hover::new(false),
                 ui.ctx(),
@@ -576,8 +576,8 @@ mod tests {
         use eframe::egui::{pos2, vec2, Id, Rect};
 
         let ctx = egui::Context::default();
-        let hover = crate::infrastructure::platform::spawn_watcher(ctx.clone(), false);
-        let mut app = Noktah::new("test".to_string(), hover, &ctx);
+        let hover = crate::infrastructure::platform::Hover::new(false);
+        let mut app = Noktah::new_for_test("test".to_string(), hover, &ctx);
         app.current_page = NotchPage::Music;
         app.lyrics = (0..12)
             .map(|i| noktah_core::lrc::LrcLine {
@@ -703,7 +703,7 @@ mod tests {
         // Frame 1: biarkan set_fonts aktif di cache.
         let _ = ctx.run(raw(), |_ctx| {});
 
-        let mut app = Noktah::new(
+        let mut app = Noktah::new_for_test(
             "test".to_string(),
             crate::infrastructure::platform::Hover::new(false),
             &ctx,
@@ -958,7 +958,7 @@ mod tests {
             egui::CentralPanel::default().show(ctx, |_ui| {});
         });
 
-        let mut app = Noktah::new(
+        let mut app = Noktah::new_for_test(
             "test".to_string(),
             crate::infrastructure::platform::Hover::new(false),
             &ctx,
@@ -1130,7 +1130,7 @@ mod tests {
         use crate::app::{Noktah, NotchPage};
         let ctx = egui::Context::default();
         let hover = crate::infrastructure::platform::Hover::new(false);
-        let mut app = Noktah::new("test".to_string(), hover, &ctx);
+        let mut app = Noktah::new_for_test("test".to_string(), hover, &ctx);
         app.settings = noktah_core::Settings::default();
 
         // Default 7 halaman aktif
@@ -1165,7 +1165,7 @@ mod tests {
         use std::time::Duration;
         let ctx = egui::Context::default();
         let hover = crate::infrastructure::platform::Hover::new(false);
-        let mut app = Noktah::new("test".to_string(), hover, &ctx);
+        let mut app = Noktah::new_for_test("test".to_string(), hover, &ctx);
 
         app.open.target = 0.0;
         app.open.snap();
@@ -1215,7 +1215,7 @@ mod tests {
         use std::time::{Duration, Instant};
         let ctx = egui::Context::default();
         let hover = crate::infrastructure::platform::Hover::new(false);
-        let mut app = Noktah::new("test".to_string(), hover, &ctx);
+        let mut app = Noktah::new_for_test("test".to_string(), hover, &ctx);
 
         app.settings = noktah_core::Settings::default();
         app.media.active = true;
@@ -1243,7 +1243,7 @@ mod tests {
 
         let ctx = egui::Context::default();
         let hover = crate::infrastructure::platform::Hover::new(false);
-        let mut app = Noktah::new("test".to_string(), hover, &ctx);
+        let mut app = Noktah::new_for_test("test".to_string(), hover, &ctx);
         app.settings = noktah_core::Settings::default();
 
         let (tx1, rx1) = sync_channel::<PermissionDecision>(1);
@@ -1319,7 +1319,7 @@ mod tests {
 
         let ctx = egui::Context::default();
         let hover = crate::infrastructure::platform::Hover::new(false);
-        let mut app = Noktah::new("test".to_string(), hover.clone(), &ctx);
+        let mut app = Noktah::new_for_test("test".to_string(), hover.clone(), &ctx);
         app.settings = noktah_core::Settings::default();
         app.settings.fullscreen_autohide = true;
 
@@ -1355,7 +1355,7 @@ mod tests {
 
         let ctx = egui::Context::default();
         let hover = crate::infrastructure::platform::Hover::new(false);
-        let mut app = Noktah::new("test".to_string(), hover, &ctx);
+        let mut app = Noktah::new_for_test("test".to_string(), hover, &ctx);
 
         for i in 1..=7 {
             app.file_shelf.push(ShelfFile {
@@ -1383,7 +1383,7 @@ mod tests {
 
         let ctx = egui::Context::default();
         let hover = crate::infrastructure::platform::Hover::new(false);
-        let mut app = Noktah::new("test".to_string(), hover, &ctx);
+        let mut app = Noktah::new_for_test("test".to_string(), hover, &ctx);
         app.settings = noktah_core::Settings::default();
         app.settings.audio_hud_enabled = true;
         app.settings.focus_dnd = true;
@@ -1460,7 +1460,7 @@ mod tests {
 
         let ctx = egui::Context::default();
         let hover = crate::infrastructure::platform::Hover::new(false);
-        let mut app = Noktah::new("test".to_string(), hover, &ctx);
+        let mut app = Noktah::new_for_test("test".to_string(), hover, &ctx);
         app.settings = noktah_core::Settings::default();
 
         let (tx, rx) = channel();
@@ -1563,7 +1563,7 @@ mod tests {
             crate::presentation::fonts::install(&ctx);
 
             let hover = crate::infrastructure::platform::Hover::new(false);
-            let mut app = Noktah::new("test_renderer".to_string(), hover, &ctx);
+            let mut app = Noktah::new_for_test("test_renderer".to_string(), hover, &ctx);
             app.settings = noktah_core::Settings::default();
             app.settings.custom_tiles_enabled = true;
             app.system_tiles_mode = true;
@@ -1719,9 +1719,630 @@ mod tests {
         egui::__run_test_ui(|ui| {
             let ctx = ui.ctx().clone();
             let hover = crate::infrastructure::platform::Hover::new(false);
-            let mut app = Noktah::new("test".to_string(), hover, &ctx);
+            let mut app = Noktah::new_for_test("test".to_string(), hover, &ctx);
 
             app.draw_appearance_tab(ui, noktah_core::Lang::Id, theme);
         });
+    }
+
+    fn collect_text_shapes(shape: &egui::epaint::Shape, out: &mut Vec<(String, egui::Rect)>) {
+        match shape {
+            egui::epaint::Shape::Text(t) => {
+                out.push((t.galley.text().to_owned(), t.visual_bounding_rect()));
+            }
+            egui::epaint::Shape::Vec(v) => {
+                for s in v {
+                    collect_text_shapes(s, out);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn collect_rect_shapes(shape: &egui::epaint::Shape, out: &mut Vec<egui::epaint::RectShape>) {
+        match shape {
+            egui::epaint::Shape::Rect(r) => out.push(*r),
+            egui::epaint::Shape::Vec(v) => {
+                for s in v {
+                    collect_rect_shapes(s, out);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    #[test]
+    fn test_custom_hex_typing_buffer_preserves_partial_edits() {
+        use crate::app::Noktah;
+        use crate::presentation::theme::Theme;
+        use noktah_core::{Lang, Settings};
+
+        let ctx = egui::Context::default();
+        let hover = crate::infrastructure::platform::Hover::new(false);
+        let mut app = Noktah::new_for_test("test".to_string(), hover, &ctx);
+        app.lang = Lang::En;
+        app.settings.language = Lang::En;
+        let input_id = egui::Id::new("custom_accent_hex_input");
+
+        let run_appearance = |app: &mut Noktah, events: Vec<egui::Event>, focus: bool| {
+            let mut raw = egui::RawInput::default();
+            raw.events = events;
+            ctx.run(raw, |ctx| {
+                if focus {
+                    ctx.memory_mut(|m| m.request_focus(input_id));
+                }
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    egui::ScrollArea::vertical().show(ui, |ui| {
+                        let theme = Theme::from_settings(&app.settings);
+                        app.draw_appearance_tab(ui, app.lang, theme);
+                    });
+                });
+            })
+        };
+
+        // Frame 1: mount Appearance tab and focus the HEX TextEdit.
+        let _ = run_appearance(&mut app, vec![], true);
+
+        // Frame 2: type partial HEX '#3B82' -> buffer preserved, settings untouched, error indicator shown.
+        let out_partial = run_appearance(
+            &mut app,
+            vec![egui::Event::Text("#3B82".to_string())],
+            true,
+        );
+        assert_eq!(app.custom_accent_input, "#3B82");
+        assert_eq!(app.settings.custom_accent_hex, None);
+        let mut texts = Vec::new();
+        for cs in &out_partial.shapes {
+            collect_text_shapes(&cs.shape, &mut texts);
+        }
+        assert!(
+            texts.iter().any(|(t, _)| t == "Invalid HEX"),
+            "expected 'Invalid HEX' indicator for partial input, got {texts:?}"
+        );
+
+        // Frame 3: press Backspace -> buffer becomes '#3B8' without being clobbered.
+        let _ = run_appearance(
+            &mut app,
+            vec![egui::Event::Key {
+                key: egui::Key::Backspace,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: egui::Modifiers::NONE,
+            }],
+            true,
+        );
+        assert_eq!(app.custom_accent_input, "#3B8");
+        assert_eq!(app.settings.custom_accent_hex, None);
+
+        // Frame 4: finish valid HEX '#3B82F6' -> updates settings & Theme accent.
+        let out_valid = run_appearance(
+            &mut app,
+            vec![egui::Event::Text("2F6".to_string())],
+            true,
+        );
+        assert_eq!(app.custom_accent_input, "#3B82F6");
+        assert_eq!(app.settings.custom_accent_hex.as_deref(), Some("#3B82F6"));
+        assert_eq!(app.settings.theme_preset, "custom");
+        let blue_theme = Theme::from_settings(&app.settings);
+        assert!(blue_theme.accent.b() > blue_theme.accent.r());
+        let mut texts_valid = Vec::new();
+        for cs in &out_valid.shapes {
+            collect_text_shapes(&cs.shape, &mut texts_valid);
+        }
+        assert!(
+            !texts_valid.iter().any(|(t, _)| t == "Invalid HEX"),
+            "valid HEX should not show error indicator"
+        );
+
+        // Frame 5: select all + type invalid '#+1+2+3' -> rejected & error indicator shown.
+        let ctrl_all = egui::Modifiers {
+            ctrl: true,
+            command: true,
+            ..Default::default()
+        };
+        let out_invalid = run_appearance(
+            &mut app,
+            vec![
+                egui::Event::Key {
+                    key: egui::Key::A,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: ctrl_all,
+                },
+                egui::Event::Text("#+1+2+3".to_string()),
+            ],
+            true,
+        );
+        assert_eq!(app.custom_accent_input, "#+1+2+3");
+        assert_eq!(
+            app.settings.custom_accent_hex.as_deref(),
+            Some("#3B82F6"),
+            "invalid '#+1+2+3' must not overwrite valid custom_accent_hex"
+        );
+        let mut texts_invalid = Vec::new();
+        for cs in &out_invalid.shapes {
+            collect_text_shapes(&cs.shape, &mut texts_invalid);
+        }
+        assert!(
+            texts_invalid.iter().any(|(t, _)| t == "Invalid HEX"),
+            "expected 'Invalid HEX' indicator for '#+1+2+3'"
+        );
+
+        // Full Settings JSON import syncs custom_accent_input and updates Theme accent.
+        let imported: Settings = serde_json::from_str(r##"{"custom_accent_hex":"#FF6B9D"}"##)
+            .expect("valid settings JSON");
+        app.apply_imported_settings(imported);
+        assert_eq!(app.settings.custom_accent_hex.as_deref(), Some("#FF6B9D"));
+        assert_eq!(app.custom_accent_input, "#FF6B9D");
+        let pink_theme = Theme::from_settings(&app.settings);
+        assert_eq!(app.theme.accent, pink_theme.accent);
+        assert!(pink_theme.accent.r() > pink_theme.accent.b());
+    }
+
+    #[test]
+    fn test_theme_preset_json_import_validation() {
+        use noktah_core::theme_preset::ThemePreset;
+        assert!(ThemePreset::from_json_str("{}").is_err());
+        assert!(ThemePreset::from_json_str(r#"{"hello": "world"}"#).is_err());
+        assert!(ThemePreset::from_json_str("invalid json string").is_err());
+
+        let valid_json = r##"{
+            "schema_version": 1,
+            "name": "Emerald Slate",
+            "accent": "green",
+            "custom_accent_hex": "#10B981",
+            "glass_effect": "full",
+            "opacity": 0.85,
+            "glass_tint_rgb": [16, 185, 129],
+            "glass_specular": 0.5,
+            "glass_blur_radius": 5,
+            "glass_saturation": 1.2
+        }"##;
+        let preset = ThemePreset::from_json_str(valid_json);
+        assert!(preset.is_ok(), "failed: {:?}", preset.err());
+        let p = preset.unwrap();
+        assert_eq!(p.accent, noktah_core::Accent::Green);
+        assert_eq!(p.custom_accent_hex.as_deref(), Some("#10B981"));
+    }
+
+    #[test]
+    fn test_ipc_hook_pin_mini_behavior() {
+        use crate::app::Noktah;
+        use crate::infrastructure::ipc::IpcEvent;
+        use noktah_core::model::AgentHookPayload;
+        use noktah_core::settings::GlassEffect;
+        use noktah_core::tile::{CustomTile, TileTone};
+        use std::sync::mpsc::channel;
+
+        let ctx = egui::Context::default();
+        let hover = crate::infrastructure::platform::Hover::new(false);
+        let mut app = Noktah::new_for_test("test".to_string(), hover, &ctx);
+        app.settings.calendar_enabled = false;
+        app.settings.audio_hud_enabled = false;
+        app.settings.glass_effect = GlassEffect::Off;
+
+        let (tx, rx) = channel();
+        app.ipc.rx = rx;
+
+        let now_ms = chrono::Utc::now().timestamp_millis();
+        let payload = AgentHookPayload {
+            hook_event_name: "tile".into(),
+            tile_id: Some("build".into()),
+            tile_title: Some("Build".into()),
+            tile_value: Some("OK".into()),
+            tile_pin_mini: Some(true),
+            tile: Some(CustomTile {
+                id: "build".into(),
+                title: "Build".into(),
+                value: "OK".into(),
+                subtitle: None,
+                tone: TileTone::Neutral,
+                progress: None,
+                ttl_secs: None,
+                updated_at_ms: now_ms,
+                pin_mini: true,
+            }),
+            ..Default::default()
+        };
+
+        // Before tile: idle pill target is 180.0
+        assert_eq!(app.compute_pill_target(), 180.0);
+
+        tx.send(IpcEvent::HookReceived(payload)).unwrap();
+        // Drive the real frame update flow (which calls poll_ipc + compute_pill_target)
+        let _ = ctx.run(Default::default(), |ctx| {
+            app.update_frame(ctx);
+        });
+
+        assert_eq!(app.custom_tiles.len(), 1);
+        assert!(app.custom_tiles.items()[0].pin_mini);
+        assert_eq!(app.compute_pill_target(), 220.0);
+        assert_eq!(app.pill.target, 220.0);
+    }
+
+    #[test]
+    fn test_deterministic_next_wake_custom_tiles_ttl() {
+        use crate::app::Noktah;
+        use noktah_core::tile::{CustomTile, TileTone};
+        use std::time::Duration;
+
+        let ctx = egui::Context::default();
+        let hover = crate::infrastructure::platform::Hover::new(false);
+        let mut app = Noktah::new_for_test("test".to_string(), hover, &ctx);
+        app.settings.mini_agent = false;
+        app.trimmed = true;
+        app.media.active = false;
+        app.banner = None;
+        app.todos.clear();
+
+        let t0 = 1_700_000_000_000_i64;
+        let baseline_wake = app.next_wake(t0);
+        assert!(
+            baseline_wake >= Duration::from_secs(1),
+            "expected baseline next_wake >= 1000ms without tiles, got {baseline_wake:?}"
+        );
+
+        let tile = CustomTile {
+            id: "temp".into(),
+            title: "Temp".into(),
+            value: "1".into(),
+            subtitle: None,
+            tone: TileTone::Neutral,
+            progress: None,
+            ttl_secs: Some(1),
+            updated_at_ms: t0 - 700, // expires at t0 + 300
+            pin_mini: false,
+        };
+        app.custom_tiles.upsert(tile, t0);
+
+        assert_eq!(app.next_wake(t0), Duration::from_millis(300));
+        assert_eq!(app.next_wake(t0 + 250), Duration::from_millis(50));
+    }
+
+    #[test]
+    fn test_draw_todo_tab_and_settings_window() {
+        use crate::app::{Noktah, SettingsTab};
+        use std::time::{Duration, Instant};
+
+        let ctx = egui::Context::default();
+        let hover = crate::infrastructure::platform::Hover::new(false);
+        let mut app = Noktah::new_for_test("test".to_string(), hover, &ctx);
+        app.settings_tab = SettingsTab::Todo;
+        app.banner = Some((
+            "Settings toast active".to_string(),
+            Instant::now()
+                .checked_sub(Duration::from_millis(500))
+                .unwrap_or_else(Instant::now),
+        ));
+
+        let output = ctx.run(Default::default(), |ctx| {
+            let should_close = app.draw_settings_window(ctx);
+            assert!(!should_close);
+        });
+
+        let mut texts = Vec::new();
+        let mut rects = Vec::new();
+        for cs in &output.shapes {
+            collect_text_shapes(&cs.shape, &mut texts);
+            collect_rect_shapes(&cs.shape, &mut rects);
+        }
+
+        let toast_text = texts
+            .iter()
+            .find(|(t, _)| t == "Settings toast active")
+            .map(|(_, r)| *r)
+            .expect("expected toast banner text to be rendered by draw_settings_window");
+
+        let toast_bg = rects
+            .iter()
+            .find(|r| r.rect.contains(toast_text.center()) && r.rect.height() >= 28.0 && r.rect.height() <= 40.0)
+            .expect("expected toast banner background rect around toast text");
+        assert!(toast_bg.rounding.nw >= 14.0);
+    }
+
+    #[test]
+    fn test_calendar_ics_path_change_clears_stale_events_and_surfaces_error() {
+        use crate::app::Noktah;
+        use noktah_core::Lang;
+
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let tmp_dir = std::env::temp_dir().join(format!(
+            "noktah_calendar_test_{}_{nanos}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&tmp_dir).unwrap();
+        let valid_ics = tmp_dir.join("valid.ics");
+        let missing_ics = tmp_dir.join("missing.ics");
+
+        std::fs::write(
+            &valid_ics,
+            "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:u1\r\nSUMMARY:Sprint Sync\r\nDTSTART:20261127T100000Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+        )
+        .unwrap();
+
+        let ctx = egui::Context::default();
+        let hover = crate::infrastructure::platform::Hover::new(false);
+        let mut app = Noktah::new_for_test("test".to_string(), hover, &ctx);
+        app.lang = Lang::En;
+        app.settings.language = Lang::En;
+        app.settings.calendar_enabled = true;
+        app.settings.calendar_ics_path = valid_ics.to_string_lossy().into_owned();
+
+        app.poll_calendar();
+        assert_eq!(app.calendar_events.len(), 1);
+        assert_eq!(app.calendar_events[0].summary, "Sprint Sync");
+        assert!(app.calendar_error.is_none());
+
+        // Switch to missing .ics -> stale events cleared and error state surfaced.
+        app.settings.calendar_ics_path = missing_ics.to_string_lossy().into_owned();
+        app.poll_calendar();
+        assert!(
+            app.calendar_events.is_empty(),
+            "stale calendar events must be cleared when switching to missing .ics"
+        );
+        assert!(
+            app.calendar_error.is_some(),
+            "calendar_error should be set when custom .ics cannot be read"
+        );
+
+        app.settings_tab = crate::app::SettingsTab::Display;
+        let output = ctx.run(Default::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                app.draw_settings_tab_content(ui);
+            });
+        });
+        let mut texts = Vec::new();
+        for cs in &output.shapes {
+            collect_text_shapes(&cs.shape, &mut texts);
+        }
+        assert!(
+            texts
+                .iter()
+                .any(|(t, _)| t.contains("Failed to load .ics file")),
+            "Display settings should render localized calendar error, got {texts:?}"
+        );
+
+        // Clearing custom path clears error state.
+        app.settings.calendar_ics_path.clear();
+        app.poll_calendar();
+        assert!(app.calendar_error.is_none());
+
+        let _ = std::fs::remove_dir_all(&tmp_dir);
+    }
+
+    #[test]
+    fn test_import_settings_preserves_calendar_events_on_same_path_and_reloads_on_change() {
+        use crate::app::Noktah;
+        use noktah_core::Settings;
+        use std::time::{Duration, Instant};
+
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let tmp_dir = std::env::temp_dir().join(format!(
+            "noktah_calendar_import_test_{}_{nanos}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&tmp_dir).unwrap();
+        let ics_a = tmp_dir.join("a.ics");
+        let ics_b = tmp_dir.join("b.ics");
+
+        std::fs::write(
+            &ics_a,
+            "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:a1\r\nSUMMARY:Event Alpha\r\nDTSTART:20261127T100000Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+        )
+        .unwrap();
+        std::fs::write(
+            &ics_b,
+            "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:b1\r\nSUMMARY:Event Beta\r\nDTSTART:20261127T110000Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+        )
+        .unwrap();
+
+        let ctx = egui::Context::default();
+        let hover = crate::infrastructure::platform::Hover::new(false);
+        let mut app = Noktah::new_for_test("test".to_string(), hover, &ctx);
+        app.settings.calendar_enabled = true;
+        app.settings.calendar_ics_path = ics_a.to_string_lossy().into_owned();
+        app.poll_calendar();
+        assert_eq!(app.calendar_events.len(), 1);
+        assert_eq!(app.calendar_events[0].summary, "Event Alpha");
+
+        // Ensure last_calendar_check is fresh (within 45s throttle).
+        app.last_calendar_check = Instant::now();
+
+        // 1. Import settings with same calendar_ics_path (even with extra whitespace): retains events immediately.
+        let mut same_path = Settings::default();
+        same_path.calendar_enabled = true;
+        same_path.calendar_ics_path = format!("  {}  ", ics_a.to_string_lossy());
+        app.apply_imported_settings(same_path);
+        assert_eq!(app.calendar_events.len(), 1);
+        assert_eq!(app.calendar_events[0].summary, "Event Alpha");
+
+        // 2. Import settings with a different calendar_ics_path: clears stale events and reloads immediately on poll_calendar().
+        let mut diff_path = Settings::default();
+        diff_path.calendar_enabled = true;
+        diff_path.calendar_ics_path = ics_b.to_string_lossy().into_owned();
+        app.apply_imported_settings(diff_path);
+        assert!(app.calendar_events.is_empty());
+        assert!(app.last_calendar_check.elapsed() >= Duration::from_secs(45));
+        app.poll_calendar();
+        assert_eq!(app.calendar_events.len(), 1);
+        assert_eq!(app.calendar_events[0].summary, "Event Beta");
+
+        // 3. Import settings disabling calendar: clears events & error.
+        let mut disabled = Settings::default();
+        disabled.calendar_enabled = false;
+        disabled.calendar_ics_path = ics_b.to_string_lossy().into_owned();
+        app.calendar_error = Some("stale".into());
+        app.apply_imported_settings(disabled);
+        assert!(app.calendar_events.is_empty());
+        assert!(app.calendar_error.is_none());
+
+        // 4. Import settings re-enabling calendar with same path: invalidates throttle and reloads immediately.
+        let mut reenabled = Settings::default();
+        reenabled.calendar_enabled = true;
+        reenabled.calendar_ics_path = ics_b.to_string_lossy().into_owned();
+        app.apply_imported_settings(reenabled);
+        app.poll_calendar();
+        assert_eq!(app.calendar_events.len(), 1);
+        assert_eq!(app.calendar_events[0].summary, "Event Beta");
+
+        let _ = std::fs::remove_dir_all(&tmp_dir);
+    }
+
+    #[test]
+    fn test_settings_toast_wraps_long_reminder_inside_bg_and_viewport() {
+        use crate::app::{Noktah, SettingsTab};
+        use eframe::egui::{pos2, vec2, Rect};
+        use std::time::{Duration, Instant};
+
+        let ctx = egui::Context::default();
+        let min_win = Rect::from_min_size(pos2(0.0, 0.0), vec2(640.0, 460.0));
+        let raw = || egui::RawInput {
+            screen_rect: Some(min_win),
+            ..Default::default()
+        };
+
+        // Frame 0: install production fonts.
+        let _ = ctx.run(raw(), |ctx| {
+            crate::presentation::fonts::install(ctx);
+            egui::CentralPanel::default().show(ctx, |_ui| {});
+        });
+        let _ = ctx.run(raw(), |_ctx| {});
+
+        let hover = crate::infrastructure::platform::Hover::new(false);
+        let mut app = Noktah::new_for_test("test".to_string(), hover, &ctx);
+        app.settings_tab = SettingsTab::Todo;
+        let long_reminder = "Reminder: Review all pull request comments, verify release SHA-256 checksums, check calendar ICS import behavior, and verify v1.6.1 before 17:00!";
+        assert!(long_reminder.len() > 120);
+        app.banner = Some((
+            long_reminder.to_string(),
+            Instant::now()
+                .checked_sub(Duration::from_millis(500))
+                .unwrap_or_else(Instant::now),
+        ));
+
+        let output = ctx.run(raw(), |ctx| {
+            let should_close = app.draw_settings_window(ctx);
+            assert!(!should_close);
+        });
+
+        let mut texts = Vec::new();
+        let mut rects = Vec::new();
+        for cs in &output.shapes {
+            collect_text_shapes(&cs.shape, &mut texts);
+            collect_rect_shapes(&cs.shape, &mut rects);
+        }
+
+        let (_, text_rect) = texts
+            .iter()
+            .find(|(t, _)| t.starts_with("Reminder: Review all pull request comments"))
+            .expect("expected wrapped long reminder text shape");
+
+        let toast_bg = rects
+            .iter()
+            .find(|r| {
+                r.fill != egui::Color32::TRANSPARENT
+                    && r.stroke.width > 0.0
+                    && r.rect.contains(text_rect.center())
+            })
+            .expect("expected toast background rect behind long reminder text");
+
+        assert!(
+            toast_bg.rect.contains_rect(*text_rect),
+            "painted toast text rect {:?} escaped toast bg rect {:?}",
+            text_rect,
+            toast_bg.rect
+        );
+        assert!(
+            min_win.contains_rect(toast_bg.visual_bounding_rect()),
+            "toast bg rect {:?} escaped minimum viewport {:?}",
+            toast_bg.visual_bounding_rect(),
+            min_win
+        );
+        assert!(
+            min_win.contains_rect(*text_rect),
+            "toast text rect {:?} escaped minimum viewport {:?}",
+            text_rect,
+            min_win
+        );
+        assert!(
+            toast_bg.rect.height() > 40.0,
+            "expected multi-line wrapped toast height > 40px, got {}",
+            toast_bg.rect.height()
+        );
+    }
+
+    #[test]
+    fn test_about_tab_honest_sha256_and_localized_errors() {
+        use crate::app::Noktah;
+        use crate::infrastructure::updater::{UpdateError, UpdateStatus};
+        use crate::presentation::theme::Theme;
+        use noktah_core::Lang;
+        use std::path::PathBuf;
+
+        let ctx = egui::Context::default();
+        let hover = crate::infrastructure::platform::Hover::new(false);
+        let mut app = Noktah::new_for_test("test".to_string(), hover, &ctx);
+
+        let render_about = |app: &mut Noktah, lang: Lang| -> Vec<String> {
+            app.lang = lang;
+            app.settings.language = lang;
+            let theme = Theme::from_settings(&app.settings);
+            let out = ctx.run(Default::default(), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    app.draw_about_tab(ui, lang, theme);
+                });
+            });
+            let mut texts = Vec::new();
+            for cs in &out.shapes {
+                collect_text_shapes(&cs.shape, &mut texts);
+            }
+            texts.into_iter().map(|(t, _)| t).collect()
+        };
+
+        // 1. Verified == true shows SHA-256 verified text
+        app.update_status = UpdateStatus::ReadyToRestart {
+            version: "v1.6.1".into(),
+            staged_exe: PathBuf::from("noktah-native.exe"),
+            staged_hook: None,
+            sha256_verified: true,
+        };
+        let en_verified = render_about(&mut app, Lang::En);
+        assert!(en_verified.iter().any(|t| t.contains("SHA-256 verified")));
+        let id_verified = render_about(&mut app, Lang::Id);
+        assert!(id_verified.iter().any(|t| t.contains("terverifikasi SHA-256")));
+
+        // 2. Verified == false MUST NOT claim SHA-256 verified
+        app.update_status = UpdateStatus::ReadyToRestart {
+            version: "v1.6.1".into(),
+            staged_exe: PathBuf::from("noktah-native.exe"),
+            staged_hook: None,
+            sha256_verified: false,
+        };
+        let en_unverified = render_about(&mut app, Lang::En);
+        assert!(!en_unverified.iter().any(|t| t.contains("SHA-256 verified")));
+        assert!(en_unverified
+            .iter()
+            .any(|t| t.contains("SHA-256 checksum unavailable")));
+        let id_unverified = render_about(&mut app, Lang::Id);
+        assert!(!id_unverified.iter().any(|t| t.contains("terverifikasi SHA-256")));
+        assert!(id_unverified
+            .iter()
+            .any(|t| t.contains("checksum SHA-256 tidak tersedia")));
+
+        // 3. Structured error renders cleanly in EN without Indonesian leak
+        app.update_status = UpdateStatus::Error(UpdateError::GitHubUnreachable("timed out".into()));
+        let en_err = render_about(&mut app, Lang::En);
+        assert!(en_err
+            .iter()
+            .any(|t| t.contains("Failed: Unable to reach GitHub: timed out")));
+        assert!(!en_err.iter().any(|t| t.contains("Gagal menghubungi")));
     }
 }

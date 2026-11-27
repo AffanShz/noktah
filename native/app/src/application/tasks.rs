@@ -14,11 +14,13 @@ use noktah_core::reminders;
 /// [`Store`]. Presentasi tidak menyentuh `Vec<Todo>` secara langsung untuk
 /// operasi yang punya aturan — supaya tidak ada dua tempat yang bisa
 /// melanggar aturan yang sama.
+#[allow(dead_code)]
 pub struct TaskList<S: Store> {
     items: Vec<Todo>,
     store: S,
 }
 
+#[allow(dead_code)]
 impl<S: Store> TaskList<S> {
     pub fn load(store: S) -> Self {
         let items: Vec<Todo> = store.load(files::TASKS);

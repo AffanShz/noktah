@@ -43,7 +43,6 @@ pub struct MascotParticle {
 pub enum ParticleKind {
     Star,
     SleepZ,
-    Spark,
 }
 
 /// State animasi dan fisika mascot Noktah.
@@ -60,7 +59,6 @@ pub struct MascotState {
 
     pub squish: Spring,
     pub bounce_y: f32,
-    pub hop_vel: f32,
 
     pub click_count: u32,
     pub last_click_sec: f32,
@@ -94,7 +92,6 @@ impl MascotState {
             next_blink_sec: 2.8,
             squish: Spring::with(1.0, 180.0, 14.0),
             bounce_y: 0.0,
-            hop_vel: 0.0,
             click_count: 0,
             last_click_sec: 0.0,
             dizzy_timer: 0.0,
@@ -611,13 +608,6 @@ impl MascotRenderer {
                         "z",
                         egui::FontId::proportional(11.0),
                         Color32::from_rgba_unmultiplied(148, 163, 184, alpha),
-                    );
-                }
-                ParticleKind::Spark => {
-                    painter.circle_filled(
-                        p.pos,
-                        1.8 * frac,
-                        Color32::from_rgba_unmultiplied(56, 189, 248, alpha),
                     );
                 }
             }

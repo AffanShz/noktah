@@ -6,7 +6,7 @@
 //! percakapan kosong ada lencana aksen di tengah — bukan teks polos yang
 //! mengambang tanpa jangkar.
 
-use crate::app::{Noktah, NotchPage};
+use crate::app::Noktah;
 use crate::presentation::{icons::Icon, style, widgets};
 use eframe::egui::{self, Color32, Rect, Rounding, Sense};
 

@@ -102,6 +102,7 @@ pub(crate) const KUOTA_H: f32 = TEKS + style::S1 + RING + style::S1 + TEKS;
 
 /// Tinggi minimum baris Home. Sampul 44 px lebih pendek dari blok kuota, jadi
 /// blok kuota yang menentukan.
+#[allow(dead_code)]
 pub(crate) const BARIS_MIN_H: f32 = KUOTA_H;
 
 impl Noktah {

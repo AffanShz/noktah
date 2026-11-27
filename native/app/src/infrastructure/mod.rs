@@ -6,6 +6,7 @@
 //! dengan fake tanpa menyentuh apa pun dari itu.
 
 pub mod ai;
+#[cfg(test)]
 pub mod fake;
 pub mod audio;
 pub mod blur;

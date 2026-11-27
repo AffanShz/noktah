@@ -318,6 +318,7 @@ impl Noktah {
                             let id = payload
                                 .tile_id
                                 .or(payload.tile_title)
+                                .or_else(|| payload.tile.map(|t| t.id))
                                 .unwrap_or_default();
                             if !id.is_empty() {
                                 self.custom_tiles.remove(&id);
@@ -526,25 +527,51 @@ impl Noktah {
 
     pub(crate) fn poll_calendar(&mut self) {
         if !self.settings.calendar_enabled {
+            self.calendar_error = None;
             return;
         }
 
-        if self.last_calendar_check.elapsed() < std::time::Duration::from_secs(45) {
+        let path_changed = self.settings.calendar_ics_path.trim() != self.calendar_path.trim();
+        if path_changed {
+            self.calendar_path = self.settings.calendar_ics_path.clone();
+            self.calendar_events.clear();
+            if self.calendar_path.trim().is_empty() {
+                self.calendar_error = None;
+            }
+        } else if self.last_calendar_check.elapsed() < std::time::Duration::from_secs(45) {
             return;
         }
         self.last_calendar_check = std::time::Instant::now();
 
-        let path = if !self.settings.calendar_ics_path.trim().is_empty() {
-            std::path::PathBuf::from(self.settings.calendar_ics_path.trim())
-        } else if let Some(appdata) = std::env::var_os("APPDATA") {
-            std::path::PathBuf::from(appdata).join("Noktah").join("calendar.ics")
+        let custom_path = self.settings.calendar_ics_path.trim();
+        if !custom_path.is_empty() {
+            match std::fs::read_to_string(custom_path) {
+                Ok(content) => {
+                    self.calendar_events = noktah_core::calendar::parse_ics(&content);
+                    self.calendar_error = None;
+                }
+                Err(err) => {
+                    self.calendar_events.clear();
+                    let msg = err.to_string();
+                    crate::infrastructure::logger::warn(
+                        "calendar",
+                        &format!("Failed to read custom .ics '{}': {}", custom_path, msg),
+                    );
+                    self.calendar_error = Some(msg);
+                }
+            }
         } else {
-            return;
-        };
-
-        if path.exists() {
-            if let Ok(content) = std::fs::read_to_string(&path) {
-                self.calendar_events = noktah_core::calendar::parse_ics(&content);
+            self.calendar_error = None;
+            if let Some(appdata) = std::env::var_os("APPDATA") {
+                let path = std::path::PathBuf::from(appdata).join("Noktah").join("calendar.ics");
+                match std::fs::read_to_string(&path) {
+                    Ok(content) => {
+                        self.calendar_events = noktah_core::calendar::parse_ics(&content);
+                    }
+                    Err(_) => {
+                        self.calendar_events.clear();
+                    }
+                }
             }
         }
     }

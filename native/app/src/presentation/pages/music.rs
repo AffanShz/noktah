@@ -88,6 +88,7 @@ pub(crate) fn lyric_row_centers(slot_galley_h: &[f32]) -> Vec<f32> {
 /// justru diukur dari ukuran baris itu sendiri, vektor ini akan berubah saat
 /// baris aktif berganti — itulah regresi yang dijaga tes. Dipakai bersama
 /// `lyric_row_centers` supaya tidak ada model kedua yang bisa menyimpang.
+#[allow(dead_code)]
 pub(crate) fn lyric_row_centers_for(
     ctx: &egui::Context,
     texts: &[String],
