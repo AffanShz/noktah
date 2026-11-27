@@ -3,6 +3,17 @@
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/),
 versi mengikuti [SemVer](https://semver.org/lang/id/).
 
+## [1.6.1] - 2026-11-27
+
+### Ditambahkan
+- **Toast Settings & Input Kustom Baru** — Toast notifikasi mengambang pada viewport *Settings* yang terikat token desain (`style::`) dengan *word-wrap* dan *clamping* viewport, input path kalender `.ics` lokal, dukungan pengingat inline `@HH:MM` pada input tugas (`noktah-core::reminders::extract_inline_due`), serta pembaruan `ThemePreset::from_json_str` yang menolak JSON kosong/tidak relevan.
+- **Dukungan Multi-Monitor & CI Preview** — Penempatan ulang ke monitor `Primary` maupun `Index` (`platform.rs`), validasi ketat HEX 6-digit (`#+1+2+3` ditolak), pembacaan setelan `store::load_strict`, serta pemicu `pull_request` pada `.github/workflows/native-preview.yml`.
+
+### Diperbaiki
+- **Kualitas Visual Liquid Glass** — Penghapusan *double-alpha* dan *double-premultiplication* pada mesh gradien 3-titik, *screen-space UV mapping* pada backdrop terblur, penyamaan alfa telinga dengan panel, serta pencegahan *self-capture* maupun pengulangan capture setelah *idle trim*.
+- **IPC Tile, Wakeup & Header System** — Pemanggilan `poll_ipc()` lebih awal sebelum close guard & kalkulasi lebar pill (`compute_pill_target`), prioritas prompt izin di atas hover-exit di frame yang sama, jadwal `next_wake()` TTL deterministik, fallback `tile.id` bersarang pada `tile-remove`, prioritas `--title` di `noktah-hook`, dan tata letak kiri-ke-kanan tombol header `System | Tiles (N) | Clear`.
+- **Lokalisasi, Updater & Isolasi Test** — Lokalisasi dwibahasa ID+EN seluruh tab *Settings*, pesan error updater terstruktur (`UpdateError`) dan status `sha256_verified` jujur di tab *About*, penghapusan event basi saat mengganti path kalender `.ics`, statistik tugas mengecualikan tugas selesai/sudah berbunyi, pembersihan `#![allow(dead_code)]`, serta isolasi penuh `%APPDATA%\Noktah` & Registry Windows via `Noktah::new_for_test()` dan guard `logger` di `cfg!(test)` (240 test lulus, 0 warning).
+
 ## [1.6.0] - 2026-11-25
 
 ### Ditambahkan
